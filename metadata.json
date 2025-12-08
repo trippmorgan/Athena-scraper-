@@ -1,0 +1,5 @@
+{
+  "name": "AthenaNet Shadow EHR",
+  "description": "Autonomous Clinical Intelligence Layer. Intercepts AthenaNet API traffic, normalizes to FHIR, and utilizes Gemini 2.5 Swarm for real-time clinical decision support.",
+  "requestFramePermissions": []
+}
