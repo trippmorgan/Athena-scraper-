@@ -1,31 +1,41 @@
 {
   "manifest_version": 3,
-  "name": "AthenaNet Shadow Interceptor",
-  "version": "1.0",
-  "description": "Tier 1 Ingestion Layer for Shadow EHR. Intercepts internal API traffic.",
+  "name": "AthenaNet Clinical Bridge",
+  "version": "1.0.0",
+  "description": "Clinical data integration layer for Shadow EHR",
   "permissions": [
-    "activeTab",
-    "scripting",
-    "storage"
+    "storage",
+    "activeTab"
   ],
   "host_permissions": [
-    "*://*.athenahealth.com/*",
-    "*://localhost/*"
+    "https://*.athenahealth.com/*",
+    "https://*.athenanet.athenahealth.com/*",
+    "http://localhost:8000/*"
   ],
   "background": {
     "service_worker": "background.js"
   },
   "content_scripts": [
     {
-      "matches": ["*://*.athenahealth.com/*"],
-      "js": ["content.js"],
-      "run_at": "document_start"
+      "matches": [
+        "https://*.athenahealth.com/*",
+        "https://*.athenanet.athenahealth.com/*"
+      ],
+      "js": ["injector.js"],
+      "run_at": "document_start",
+      "all_frames": true
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": ["injected.js"],
-      "matches": ["*://*.athenahealth.com/*"]
+      "resources": ["interceptor.js"],
+      "matches": [
+        "https://*.athenahealth.com/*",
+        "https://*.athenanet.athenahealth.com/*"
+      ]
     }
-  ]
+  ],
+  "action": {
+    "default_title": "AthenaNet Bridge Status"
+  }
 }
