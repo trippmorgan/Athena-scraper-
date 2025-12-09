@@ -103,3 +103,73 @@ The system does not use a single "Chatbot." It uses specialized agents invoked i
 2.  **Python Socket Server:** Build the `FastAPI` or `Websocket` server to receive the extension's payload.
 3.  **Bridge:** Replace `services/mockScraperService.ts` with a real `WebSocket` client that connects to `ws://localhost:8000`.
 
+---
+
+## 7. Implementation & Deployment Guide
+
+This section outlines the operational requirements to deploy the Shadow EHR in a local environment.
+
+### 7.1 Environment Prerequisites
+
+The system is a hybrid application requiring two distinct runtimes:
+
+1.  **JavaScript Runtime (Frontend):**
+    *   **Node.js v18+**: Required to build the React application.
+    *   **Package Manager**: `npm` or `yarn`.
+
+2.  **Python Runtime (Backend/Scraper Engine):**
+    *   **Conda Environment (Recommended):** We highly recommend isolating the Python dependencies in a Conda environment to avoid conflicts with system libraries. A ready-to-use `environment.yml` is provided.
+    *   **Python Version**: 3.10+ (Required for advanced type hinting and asyncio features used in the scraper).
+    *   **Dependencies**: `fastapi`, `uvicorn`, `websockets`, `playwright` (if using active crawling).
+
+### 7.2 Configuration (`.env`)
+
+The application requires environment variables to secure sensitive credentials. Create a `.env` file in the project root:
+
+```ini
+# Required for Intelligence Layer
+API_KEY=AIzaSy... (Your Google Gemini API Key)
+
+# Optional: Backend Configuration (Future State)
+# POSTGRES_URL=postgresql://user:pass@localhost:5432/shadow_ehr
+# SCRAPER_WS_URL=ws://localhost:8000/ws
+```
+
+### 7.3 Interaction with AthenaNet
+
+**Crucial Operational Concept:** The Shadow EHR utilizes a "Session Piggybacking" technique.
+
+*   **Does AthenaNet need to be open?** **YES.**
+    You must have Google Chrome open with a tab logged into AthenaNet (`athenahealth.com`).
+    
+*   **Does the user need to log in?** **YES.**
+    The system *does not* handle authentication (OAuth/2FA). It relies on the *existing, authenticated session* of the physician. 
+    
+    1.  **Login:** The physician logs into AthenaNet normally using their credentials and 2FA.
+    2.  **Injection:** The Chrome Extension (once installed) automatically detects the active session tokens (cookies/headers).
+    3.  **Interception:** When the physician views a patient, the extension "sees" the same data the browser sees and mirrors it to our Python backend.
+
+### 7.4 Deployment Steps
+
+1.  **Start the Backend (Python):**
+    ```bash
+    conda env create -f environment.yml
+    conda activate shadow-ehr
+    uvicorn main:app --reload --port 8000
+    ```
+
+2.  **Start the Frontend (React):**
+    ```bash
+    npm install
+    npm start
+    ```
+    *The Command Center will open at `http://localhost:3000`.*
+
+3.  **Load the Extension:**
+    *   Go to `chrome://extensions`.
+    *   Enable "Developer Mode".
+    *   Click "Load Unpacked" and select the `/extension` folder (to be built).
+
+4.  **Clinical Workflow:**
+    *   Navigate to a patient chart in AthenaNet.
+    *   Watch the **Shadow Command Center** (running on a second monitor) instantly populate with the patient's data, generated summaries, and risk scores.
