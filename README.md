@@ -118,9 +118,9 @@ The system is a hybrid application requiring two distinct runtimes:
     *   **Package Manager**: `npm` or `yarn`.
 
 2.  **Python Runtime (Backend/Scraper Engine):**
-    *   **Conda Environment (Recommended):** We highly recommend isolating the Python dependencies in a Conda environment to avoid conflicts with system libraries. A ready-to-use `environment.yml` is provided.
-    *   **Python Version**: 3.10+ (Required for advanced type hinting and asyncio features used in the scraper).
-    *   **Dependencies**: `fastapi`, `uvicorn`, `websockets`, `playwright` (if using active crawling).
+    *   **Conda Environment (Recommended):** Use the provided `environment.yml` to manage dependencies.
+    *   **Python Version**: 3.10+
+    *   **Key Libraries**: `fastapi`, `playwright`, `pydantic`.
 
 ### 7.2 Configuration (`.env`)
 
@@ -129,10 +129,6 @@ The application requires environment variables to secure sensitive credentials. 
 ```ini
 # Required for Intelligence Layer
 API_KEY=AIzaSy... (Your Google Gemini API Key)
-
-# Optional: Backend Configuration (Future State)
-# POSTGRES_URL=postgresql://user:pass@localhost:5432/shadow_ehr
-# SCRAPER_WS_URL=ws://localhost:8000/ws
 ```
 
 ### 7.3 Interaction with AthenaNet
@@ -153,8 +149,16 @@ API_KEY=AIzaSy... (Your Google Gemini API Key)
 
 1.  **Start the Backend (Python):**
     ```bash
+    # 1. Create the environment
     conda env create -f environment.yml
+    
+    # 2. Activate it
     conda activate shadow-ehr
+    
+    # 3. CRITICAL: Install browser binaries for Playwright
+    playwright install
+    
+    # 4. Run the server
     uvicorn main:app --reload --port 8000
     ```
 
@@ -172,4 +176,4 @@ API_KEY=AIzaSy... (Your Google Gemini API Key)
 
 4.  **Clinical Workflow:**
     *   Navigate to a patient chart in AthenaNet.
-    *   Watch the **Shadow Command Center** (running on a second monitor) instantly populate with the patient's data, generated summaries, and risk scores.
+    *   Watch the **Shadow Command Center** (running on a second monitor) instantly populate with the patient's data.
