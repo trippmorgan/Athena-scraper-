@@ -1,179 +1,156 @@
-# AthenaNet Shadow EHR: Autonomous Clinical Intelligence Layer
+# AthenaNet Shadow EHR: Autonomous Clinical Intelligence Overlay
 ## System Architecture & Engineering Thesis
 
-**Version:** 0.9.0 (Prototype)  
-**Architecture:** Parasitic Overlay / Sidecar Pattern  
-**Core Intelligence:** Gemini 2.5 Flash (Multi-Agent Swarm)
+**Version:** 0.9.1 (Alpha)
+**Architecture:** Parasitic Browser-Based Overlay (Sidecar Pattern)
+**Core Intelligence:** Google Gemini 2.5 Flash (Multi-Agent Swarm)
 
 ---
 
-## 1. Abstract
-The **AthenaNet Shadow EHR** is a high-fidelity software overlay designed to decouple clinical data utility from the underlying constraints of the AthenaHealth interface. By implementing a browser-based **Interceptor Layer** (Chrome Extension) and a local **Normalization Engine** (Python), the system creates a real-time, read/write-capable "Shadow Record." This record powers a **Multi-Agent Generative AI Swarm** that automates documentation, risk stratification, and coding in real-time, effectively functioning as an autonomous resident physician sitting between the surgeon and the raw EHR database.
+## 1. Abstract: The Case for Parasitic Interoperability
 
-## 2. System Topology
+Contemporary Electronic Health Records (EHRs) act as semantic silos, trapping high-value clinical data within proprietary, non-interoperable interfaces. The **AthenaNet Shadow EHR** proposes a novel architectural paradigm: **Parasitic Interoperability**. Instead of relying on slow, permissioned HL7/FHIR interfaces provided by the vendor, this system acts as a benevolent parasite on the host application (AthenaNet).
 
-The system operates on a four-tier data pipeline:
-
-### Tier 1: The Ingestion Layer (Chrome Extension)
-*   **Mechanism:** `window.fetch` and `XMLHttpRequest` prototype interception.
-*   **Strategy:** Unlike traditional scrapers that parse DOM (HTML), this system listens to the "wire." It intercepts the JSON payloads AthenaNet sends to its own frontend.
-*   **Modes:**
-    *   **Passive (Listener):** Captures data only as the physician navigates the chart.
-    *   **Active (Vacuum):** Programmatically navigates the internal Athena router to "vacuum" specific endpoints (`/chart/patient/{id}/*`) without user interaction.
-
-### Tier 2: The Normalization Engine (Python/Local)
-*   **Role:** ETL (Extract, Transform, Load).
-*   **Process:** Raw Athena JSON is noisy and UI-specific. The Python engine applies schema mapping to convert proprietary Athena objects into **FHIR-lite** (Fast Healthcare Interoperability Resources) compatible JSON.
-*   **Output:** Cleaned, structured clinical objects (Patient, Encounter, Condition, Medication).
-
-### Tier 3: The Data Hub (PlaudAI / PostgreSQL)
-*   **Role:** Persistence & Provenance.
-*   **Function:** Serves as the "Single Source of Truth" for the Shadow EHR.
-*   **Mirror Ledger:** A cryptographic-style audit log (implemented in `MirrorLedger.tsx`) that records every read operation (scrape) and every write operation (AI generation) to ensure clinical defensibility.
-
-### Tier 4: The Intelligence Layer (React + Gemini)
-*   **Role:** Presentation & Cognitive Processing.
-*   **Implementation:** A React-based Command Center (`App.tsx`) that visualizes the data and orchestrates the AI agents.
+By injecting a listener into the browser's execution context, the system achieves **Read-Write capability** on the live clinical data stream without requiring backend integration. This creates a "Shadow Record"—a real-time, normalized Digital Twin of the patient chart—which serves as the grounding context for a swarm of Generative AI agents. These agents function as an autonomous clinical support layer, performing documentation, risk stratification, and coding tasks in parallel with the human physician's workflow.
 
 ---
 
-## 3. Frontend Engineering & Code Structure
+## 2. Architectural Topology
 
-The frontend (`/`) is built using **React 19** and **TypeScript**, emphasizing strict typing for medical data structures.
+The system implements a four-tier data pipeline designed to minimize latency (<100ms wire-to-agent) and maximize semantic fidelity.
 
-### 3.1 Core Components
+### 2.1 Data Flow Logic
 
-#### `App.tsx` (The Orchestrator)
-The root component acts as the central state machine. It manages three critical state verticals:
-1.  **Connection State:** Is the Scraper Active or Passive? (`scraperMode`)
-2.  **Clinical State:** The current Patient object in memory. (`currentPatient`)
-3.  **Agent State:** The asynchronous "thinking" states of the AI swarm.
+1.  **Origin:** AthenaNet React Frontend initiates an HTTP request.
+2.  **Interception:** Chrome Content Script (`injected.js`) hooks the `window.fetch` prototype.
+3.  **Extraction:** The JSON payload is cloned and serialized before the browser renders it.
+4.  **Transmission:** Data is piped via a persistent WebSocket to the local Python Engine.
+5.  **Normalization:** Python converts proprietary Athena JSON to **FHIR R4** resources.
+6.  **Inference:** The React Command Center dispatches the FHIR object to the **Gemini 2.5 Flash** swarm.
+7.  **Output:** Clinical insights are rendered on the Command Center UI.
 
-#### `services/geminiService.ts` (The Cortex)
-This module interfaces with the Google Gemini API. It implements a **Stateless Request Pattern**:
-*   It does not hold conversation history (chat).
-*   It performs "Zero-Shot" or "Few-Shot" analysis on the JSON payload provided by the scraper.
-*   **Safety:** It sets `temperature: 0.2` to minimize hallucinations, prioritizing deterministic output for medical safety.
+### 2.2 Tier 1: The Ingestion Layer (Browser Context)
+*   **Mechanism:** Prototype Mutation (Monkey Patching).
+*   **Implementation:** The system injects a content script into the "Main World" of the browser tab. It overwrites `window.fetch` and `XMLHttpRequest.prototype.open/send`.
+*   **Capabilities:**
+    *   **Transparency:** The host application (Athena) is unaware of the interception.
+    *   **Full Fidelity:** The interceptor captures the exact JSON payloads used to render the official UI, bypassing any "public API" data loss.
+    *   **Active Navigation:** In "Vacuum Mode," the extension can programmatically drive the host router to visit specific patient sub-pages (Labs, Imaging) to hydrate the Shadow Record fully.
 
-#### `components/LiveLog.tsx` (The Nervous System)
-Visualizes the raw data stream. It provides psychological reassurance to the user that the "Interceptor" is functioning. It uses a `ref`-based auto-scroll mechanism to handle high-velocity log events during "Active/Vacuum" mode.
+### 2.3 Tier 2: The Normalization Engine (Python/FastAPI)
+*   **Role:** ETL (Extract, Transform, Load) & Semantic Mapping.
+*   **Challenge:** AthenaNet internal APIs return non-standard, UI-optimized JSON with irregular keys and deeply nested structures.
+*   **Solution:** The Python backend implements a robust **Schema Mapper** that:
+    *   Flattens nested arrays.
+    *   Normalizes dates to ISO-8601.
+    *   Maps proprietary medication IDs to RxNorm concepts (where possible).
+    *   Constructs valid **FHIR R4** resources (Patient, Observation, Condition).
+*   **Latency Control:** Uses `FastAPI` and `uvicorn` for high-concurrency asynchronous processing.
 
-#### `components/MirrorLedger.tsx` (The Audit Trail)
-Implements the "Mirror Ledger" concept.
-*   **Data Structure:** `hash`, `entity`, `action`, `timestamp`.
-*   **Purpose:** In a clinical audit, this component proves *where* a suggestion came from. Did the AI hallucinate a diagnosis, or did it extract it from an intercepted API call 30ms prior? The Ledger provides the causal link.
+### 2.4 Tier 3: The Intelligence Layer (Multi-Agent Swarm)
+The system eschews a monolithic LLM approach in favor of a **Mixture of Agents (MoA)** architecture. The React frontend acts as the orchestrator, dispatching data to specialized prompts running on **Gemini 2.5 Flash**.
 
-### 3.2 Type Definitions (`types.ts`)
-We utilize strict interfaces to enforce data integrity:
-*   `Patient`: A composite interface aggregating Demographics, Conditions (ICD), and Meds (RxNorm-style strings).
-*   `ScraperMode`: Enum controlling the behavior of the ingestion layer.
+| Agent Identity | Cognitive Role | Input Vector | Output Artifact |
+| :--- | :--- | :--- | :--- |
+| **Clinical Summarizer** | Synthesis | Notes, Vitals, Labs | SOAP Note (Text) |
+| **Risk Predictor** | Probabilistic Inference | Chronic Conditions, Meds | Risk Score (0-100) + Rationale |
+| **Coding Assistant** | Semantic Translation | Diagnosis List, Procedures | ICD-10 / CPT Codes |
 
----
-
-## 4. Multi-Agent Swarm Architecture
-
-The system does not use a single "Chatbot." It uses specialized agents invoked in parallel (`Promise.all` pattern in `runAgents`):
-
-1.  **Clinical Summarizer Agent:**
-    *   *Input:* Demographics, Vitals, Notes.
-    *   *System Prompt:* "Expert Medical Scribe."
-    *   *Output:* SOAP Note formatted text.
-
-2.  **Risk Predictor Agent:**
-    *   *Input:* Conditions, Vitals, Labs.
-    *   *System Prompt:* "Clinical Risk AI."
-    *   *Output:* Calculated probability score + Rationale.
-
-3.  **Coding Assistant Agent:**
-    *   *Input:* Encounter Notes + Problem List.
-    *   *System Prompt:* "Medical Coder (CPT/ICD-10)."
-    *   *Output:* Billing codes.
-
-## 5. Security & Compliance Strategy
-
-*   **Local Execution:** The architecture favors local Python processing to minimize data egress.
-*   **Ephemeral Frontend:** The React app holds patient data in memory (RAM) only. Refreshing the page clears the PHI (Protected Health Information). Persistence is handled solely by the secure backend (PlaudAI/Postgres).
-*   **API Key Isolation:** The Gemini API key is injected via `process.env`, ensuring it is never hardcoded in the source.
+### 2.5 Tier 4: The Mirror Ledger (Provenance & Audit)
+To address the "Black Box" problem of Generative AI, the system implements a **Mirror Ledger**.
+*   **Structure:** An append-only, cryptographic-style log of every atomic operation.
+*   **Function:** Traces every AI-generated insight back to the specific intercepted JSON packet that grounded it.
+*   **Compliance:** Ensures that no hallucination goes undetected; every claim in the generated output has a pointer to source data in the capture log.
 
 ---
 
-## 6. Next Implementation Steps
+## 3. Operational Modes
 
-1.  **Chrome Extension:** Scaffold `manifest.json` (Manifest V3) with `declarativeNetRequest` or `webRequest` permissions.
-2.  **Python Socket Server:** Build the `FastAPI` or `Websocket` server to receive the extension's payload.
-3.  **Bridge:** Replace `services/mockScraperService.ts` with a real `WebSocket` client that connects to `ws://localhost:8000`.
+### Mode A: Passive Listener (The "Scribe")
+*   **Behavior:** The system remains silent, capturing only the data the physician explicitly views.
+*   **Use Case:** Real-time documentation assistance during a patient visit.
+*   **Load Impact:** Zero.
+
+### Mode B: Active Vacuum (The "Crawler")
+*   **Behavior:** The system utilizes the Chrome Extension's scripting privileges to fetch background resources.
+*   **Process:** When a patient is loaded, the vacuum automatically requests `/chart/patient/{id}/labs`, `/medications`, and `/imaging` in parallel background threads.
+*   **Use Case:** Pre-visit chart prep; population health analytics.
 
 ---
 
-## 7. Implementation & Deployment Guide
+## 4. Security & Privacy Thesis
 
-This section outlines the operational requirements to deploy the Shadow EHR in a local environment.
+The architecture is designed around **Data Sovereignty** and **Ephemeral Processing**.
 
-### 7.1 Environment Prerequisites
+1.  **Local-First Execution:** The Python Normalization Engine runs on `localhost`. Patient data is processed within the hospital's firewall (on the physician's machine).
+2.  **Ephemeral Frontend:** The React Command Center holds PHI in volatile memory (RAM). A browser refresh purges the session.
+3.  **No Persistence (Default):** The system does not write to a third-party database by default. Persistence is opt-in via the PlaudAI connector.
+4.  **API Key Isolation:** The LLM interface uses environment-injected keys (`process.env.API_KEY`), ensuring credentials never touch the source code or the browser bundle.
 
-The system is a hybrid application requiring two distinct runtimes:
+---
 
-1.  **JavaScript Runtime (Frontend):**
-    *   **Node.js v18+**: Required to build the React application.
-    *   **Package Manager**: `npm` or `yarn`.
+## 5. Engineering Manual: Deployment & Configuration
 
-2.  **Python Runtime (Backend/Scraper Engine):**
-    *   **Conda Environment (Recommended):** Use the provided `environment.yml` to manage dependencies.
-    *   **Python Version**: 3.10+
-    *   **Key Libraries**: `fastapi`, `playwright`, `pydantic`.
+### 5.1 Prerequisites
+*   **Node.js v18+**: For the React Command Center.
+*   **Python 3.10+**: For the Normalization Engine.
+*   **Google Chrome**: The host environment.
 
-### 7.2 Configuration (`.env`)
+### 5.2 The Environment
+The project uses `Conda` for Python dependency isolation and `npm` for the frontend.
 
-The application requires environment variables to secure sensitive credentials. Create a `.env` file in the project root:
-
-```ini
-# Required for Intelligence Layer
-API_KEY=AIzaSy... (Your Google Gemini API Key)
+**File:** `environment.yml`
+```yaml
+name: shadow-ehr
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+    - fastapi
+    - uvicorn
+    - pydantic
+    - websockets
+    - playwright
+    - psycopg2-binary
 ```
 
-### 7.3 Interaction with AthenaNet
+### 5.3 Installation Sequence
 
-**Crucial Operational Concept:** The Shadow EHR utilizes a "Session Piggybacking" technique.
+**Phase 1: Backend Initialization**
+```bash
+# 1. Create the Conda environment
+conda env create -f environment.yml
 
-*   **Does AthenaNet need to be open?** **YES.**
-    You must have Google Chrome open with a tab logged into AthenaNet (`athenahealth.com`).
-    
-*   **Does the user need to log in?** **YES.**
-    The system *does not* handle authentication (OAuth/2FA). It relies on the *existing, authenticated session* of the physician. 
-    
-    1.  **Login:** The physician logs into AthenaNet normally using their credentials and 2FA.
-    2.  **Injection:** The Chrome Extension (once installed) automatically detects the active session tokens (cookies/headers).
-    3.  **Interception:** When the physician views a patient, the extension "sees" the same data the browser sees and mirrors it to our Python backend.
+# 2. Activate the environment
+conda activate shadow-ehr
 
-### 7.4 Deployment Steps
+# 3. CRITICAL: Install Playwright browsers (Required for Active Mode)
+playwright install
 
-1.  **Start the Backend (Python):**
-    ```bash
-    # 1. Create the environment
-    conda env create -f environment.yml
-    
-    # 2. Activate it
-    conda activate shadow-ehr
-    
-    # 3. CRITICAL: Install browser binaries for Playwright
-    playwright install
-    
-    # 4. Run the server
-    uvicorn main:app --reload --port 8000
-    ```
+# 4. Create .env file for Intelligence Layer
+echo "API_KEY=your_gemini_key_here" > .env
 
-2.  **Start the Frontend (React):**
-    ```bash
-    npm install
-    npm start
-    ```
-    *The Command Center will open at `http://localhost:3000`.*
+# 5. Ignite the Engine
+uvicorn backend.main:app --reload --port 8000
+```
 
-3.  **Load the Extension:**
-    *   Go to `chrome://extensions`.
-    *   Enable "Developer Mode".
-    *   Click "Load Unpacked" and select the `/extension` folder (to be built).
+**Phase 2: Frontend Initialization**
+```bash
+# In a new terminal
+npm install
+npm start
+# Access Command Center at http://localhost:3000
+```
 
-4.  **Clinical Workflow:**
-    *   Navigate to a patient chart in AthenaNet.
-    *   Watch the **Shadow Command Center** (running on a second monitor) instantly populate with the patient's data.
+**Phase 3: The Interceptor Injection**
+1.  Open Chrome to `chrome://extensions`.
+2.  Enable **Developer Mode**.
+3.  Click **Load Unpacked**.
+4.  Select the `extension/` directory.
+
+### 5.4 The "Piggyback" Protocol
+The system requires an active, authenticated AthenaNet session.
+1.  Log in to `athenahealth.com` in Chrome.
+2.  The Extension will detect the session cookies automatically.
+3.  Open the Shadow Command Center (`localhost:3000`) in a secondary window/monitor.
+4.  Navigate AthenaNet normally. The Shadow EHR will mirror the data instantly.
