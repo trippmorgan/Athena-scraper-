@@ -1,7 +1,7 @@
 # AthenaNet Shadow EHR: Autonomous Clinical Intelligence Overlay
 ## System Architecture & Engineering Thesis
 
-**Version:** 0.9.1 (Alpha)
+**Version:** 0.9.2 (Alpha)
 **Architecture:** Parasitic Browser-Based Overlay (Sidecar Pattern)
 **Core Intelligence:** Google Gemini 2.5 Flash (Multi-Agent Swarm)
 
@@ -131,7 +131,7 @@ playwright install
 echo "API_KEY=your_gemini_key_here" > .env
 
 # 5. Ignite the Engine
-uvicorn backend.main:app --reload --port 8000
+uvicorn main:app --reload --port 8000
 ```
 
 **Phase 2: Frontend Initialization**
