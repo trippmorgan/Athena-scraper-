@@ -1,5 +1,5 @@
-// injector.js - Content script that injects interceptor into page context
-// This runs in the content script context and bridges to the page's JS context
+// injector.js - Content script that bridges page context and background worker
+// Now handles both passive interception AND active fetch commands
 
 (function() {
   'use strict';
@@ -7,13 +7,13 @@
   const Logger = {
     _log: (level, emoji, msg, data) => {
       const time = new Date().toLocaleTimeString('en-US', { hour12: false });
-      const prefix = `[AthenaNet Bridge Injector ${time}]`;
+      const prefix = `[Shadow EHR Bridge ${time}]`;
       const styles = {
         info: "color: #3b82f6; font-weight: bold;",
         success: "color: #10b981; font-weight: bold;",
         warn: "color: #f59e0b; font-weight: bold;",
         error: "color: #ef4444; font-weight: bold;",
-        debug: "color: #8b5cf6;"
+        active: "color: #f97316; font-weight: bold;"
       };
       const style = styles[level] || styles.info;
       data ? console.log(`%c${prefix} ${emoji} ${msg}`, style, data) : console.log(`%c${prefix} ${emoji} ${msg}`, style);
@@ -22,67 +22,199 @@
     success: (msg, data) => Logger._log('success', '✅', msg, data),
     warn: (msg, data) => Logger._log('warn', '⚠️', msg, data),
     error: (msg, data) => Logger._log('error', '❌', msg, data),
-    debug: (msg, data) => Logger._log('debug', '🔍', msg, data)
+    active: (msg, data) => Logger._log('active', '🎯', msg, data)
   };
 
-  let messageCount = 0;
+  let passiveMessageCount = 0;
+  let activeCommandCount = 0;
+  let contextValid = true;
 
-  Logger.info('Injector initializing...');
-  Logger.info('Page:', window.location.href);
-
-  // Inject the interceptor script into the page's actual context
-  // (content scripts can't access window.fetch directly - isolation)
-  const script = document.createElement('script');
-  script.src = chrome.runtime.getURL('interceptor.js');
-  script.onload = function() {
-    Logger.success('Interceptor script injected successfully');
-    this.remove(); // Clean up after injection
-  };
-  script.onerror = function(e) {
-    Logger.error('Failed to inject interceptor script', e);
-  };
-  (document.head || document.documentElement).appendChild(script);
-
-  // Listen for messages from the injected script (via window.postMessage)
-  window.addEventListener('message', function(event) {
-    // Security: only accept messages from same window
-    if (event.source !== window) return;
-    if (!event.data || event.data.type !== 'ATHENA_API_INTERCEPT') return;
-
-    messageCount++;
-    const payload = event.data.payload;
-
-    Logger.success(`Message #${messageCount} received from interceptor`, {
-      source: payload.source,
-      method: payload.method,
-      url: payload.url?.substring(0, 50) + '...',
-      patientId: payload.patientId,
-      size: payload.size
-    });
-
-    // Forward to background service worker
+  // Check if extension context is still valid
+  function isContextValid() {
     try {
-      chrome.runtime.sendMessage({
-        type: 'API_CAPTURE',
-        payload: payload
-      }, (response) => {
+      // This will throw if context is invalidated
+      return chrome.runtime?.id != null;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Safe wrapper for chrome.runtime.sendMessage
+  function safeSendMessage(message, callback) {
+    if (!isContextValid()) {
+      if (!contextValid) return; // Already logged
+      contextValid = false;
+      Logger.warn('Extension context invalidated - page refresh required');
+      return;
+    }
+
+    try {
+      chrome.runtime.sendMessage(message, (response) => {
         if (chrome.runtime.lastError) {
-          Logger.error('Failed to send to background:', chrome.runtime.lastError.message);
-        } else {
-          Logger.debug('Forwarded to background worker');
+          const errorMsg = chrome.runtime.lastError.message;
+          if (errorMsg.includes('context invalidated')) {
+            contextValid = false;
+            Logger.warn('Extension context invalidated - page refresh required');
+          } else {
+            Logger.error('Message send failed:', errorMsg);
+          }
+        } else if (callback) {
+          callback(response);
         }
       });
-    } catch (err) {
-      Logger.error('Exception forwarding message:', err);
+    } catch (e) {
+      if (e.message.includes('context invalidated')) {
+        contextValid = false;
+        Logger.warn('Extension context invalidated - page refresh required');
+      } else {
+        Logger.error('Send message error:', e.message);
+      }
+    }
+  }
+
+  Logger.info('Content script initializing...');
+  Logger.info('Page:', window.location.href);
+
+  // ============================================================
+  // INJECT SCRIPTS INTO PAGE CONTEXT
+  // ============================================================
+
+  function injectScript(filename) {
+    return new Promise((resolve, reject) => {
+      if (!isContextValid()) {
+        Logger.warn('Cannot inject script - extension context invalidated');
+        reject(new Error('Extension context invalidated'));
+        return;
+      }
+
+      try {
+        const script = document.createElement('script');
+        script.src = chrome.runtime.getURL(filename);
+        script.onload = function() {
+          Logger.success(`${filename} injected`);
+          this.remove();
+          resolve();
+        };
+        script.onerror = function(e) {
+          Logger.error(`Failed to inject ${filename}`, e);
+          reject(e);
+        };
+        (document.head || document.documentElement).appendChild(script);
+      } catch (e) {
+        if (e.message.includes('context invalidated')) {
+          contextValid = false;
+          Logger.warn('Extension context invalidated during injection');
+        }
+        reject(e);
+      }
+    });
+  }
+
+  // Inject both passive interceptor and active fetcher
+  async function initializeInjections() {
+    try {
+      await injectScript('interceptor.js');  // Passive interception
+      await injectScript('activeFetcher.js'); // Active fetching
+      Logger.success('All scripts injected successfully');
+    } catch (e) {
+      Logger.error('Script injection failed', e);
+    }
+  }
+
+  initializeInjections();
+
+  // ============================================================
+  // PASSIVE INTERCEPTION RELAY (existing functionality)
+  // ============================================================
+
+  window.addEventListener('message', function(event) {
+    if (event.source !== window) return;
+
+    // Handle passive interception
+    if (event.data?.type === 'ATHENA_API_INTERCEPT') {
+      passiveMessageCount++;
+      const payload = event.data.payload;
+
+      Logger.success(`Passive intercept #${passiveMessageCount}`, {
+        method: payload.method,
+        url: payload.url?.substring(0, 50) + '...'
+      });
+
+      safeSendMessage({
+        type: 'API_CAPTURE',
+        payload: payload
+      });
+    }
+
+    // Handle active fetch results (from activeFetcher.js)
+    if (event.data?.type === 'ACTIVE_FETCH_RESULT') {
+      Logger.active('Active fetch result received', {
+        action: event.data.action,
+        success: event.data.payload?.success !== false
+      });
+
+      // Relay to background worker
+      safeSendMessage({
+        type: 'ACTIVE_FETCH_RESULT',
+        action: event.data.action,
+        payload: event.data.payload,
+        callbackId: event.data.callbackId,
+        timestamp: event.data.timestamp
+      });
     }
   });
 
-  Logger.success('Injector ready and listening');
+  // ============================================================
+  // ACTIVE FETCH COMMAND RELAY (from background worker)
+  // ============================================================
 
-  // Periodic stats
+  // Safely register message listener
+  try {
+    if (isContextValid()) {
+      chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+        if (!isContextValid()) {
+          return false;
+        }
+
+        if (message.type === 'ACTIVE_FETCH_COMMAND') {
+          activeCommandCount++;
+          Logger.active(`Active command #${activeCommandCount}`, {
+            action: message.action,
+            payload: message.payload
+          });
+
+          // Forward command to page context (activeFetcher.js)
+          window.postMessage({
+            type: 'ACTIVE_FETCH_COMMAND',
+            action: message.action,
+            payload: message.payload,
+            callbackId: message.callbackId
+          }, '*');
+
+          sendResponse({ forwarded: true });
+        }
+
+        return true;
+      });
+    }
+  } catch (e) {
+    Logger.warn('Failed to register message listener - extension may need refresh');
+  }
+
+  // ============================================================
+  // STATUS & DIAGNOSTICS
+  // ============================================================
+
+  Logger.success('Content script ready');
+  Logger.info('Modes: Passive Interception + Active Fetching');
+
+  // Periodic status
   setInterval(() => {
-    if (messageCount > 0) {
-      Logger.info(`Stats: ${messageCount} messages forwarded`);
+    if (passiveMessageCount > 0 || activeCommandCount > 0) {
+      Logger.info('Stats', {
+        passiveIntercepts: passiveMessageCount,
+        activeCommands: activeCommandCount
+      });
     }
   }, 60000);
 

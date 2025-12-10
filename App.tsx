@@ -1,25 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  LogEntry, 
-  ScraperMode, 
-  ScraperStatus, 
-  Patient, 
-  AgentOutput,
-  LedgerEntry 
+import {
+  LogEntry,
+  ScraperMode,
+  ScraperStatus,
+  Patient,
+  LedgerEntry
 } from './types';
-import { generateAgentResponse } from './services/geminiService';
 import { wsService } from './services/websocketService'; // Real WS Service
 import { LiveLog } from './components/LiveLog';
-import { AgentCard } from './components/AgentCard';
 import { MirrorLedger } from './components/MirrorLedger';
 import { ScraperControl } from './components/ScraperControl';
-import { 
-  Activity, 
+import { SurgicalDashboard } from './components/SurgicalDashboard';
+import {
+  Activity,
   LayoutDashboard,
-  User, 
-  FileText, 
-  AlertOctagon, 
-  BrainCircuit,
+  User,
   Search,
   History
 } from 'lucide-react';
@@ -36,11 +31,6 @@ const App: React.FC = () => {
   const [patientHistory, setPatientHistory] = useState<Patient[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearchResults, setShowSearchResults] = useState(false);
-
-  // Agents State
-  const [summaryAgent, setSummaryAgent] = useState<AgentOutput>({ agentName: 'Clinical Summarizer', status: 'idle', content: '', timestamp: '', modelUsed: '' });
-  const [riskAgent, setRiskAgent] = useState<AgentOutput>({ agentName: 'Risk Predictor', status: 'idle', content: '', timestamp: '', modelUsed: '' });
-  const [codingAgent, setCodingAgent] = useState<AgentOutput>({ agentName: 'Coding Assistant', status: 'idle', content: '', timestamp: '', modelUsed: '' });
 
   // Use refs to prevent stale closures in WS callbacks
   const patientRef = useRef<Patient | null>(null);
@@ -73,9 +63,6 @@ const App: React.FC = () => {
             
             // Log to Ledger
             addToLedger('ScraperEngine', `Intercepted Chart: ${patient.mrn}`);
-            
-            // Trigger Agents
-            runAgents(patient);
         }
     };
 
@@ -104,50 +91,12 @@ const App: React.FC = () => {
       patientRef.current = patient;
       setSearchQuery('');
       setShowSearchResults(false);
-      runAgents(patient); // Re-run agents on historical data
   };
 
-  const filteredPatients = patientHistory.filter(p => 
-      p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+  const filteredPatients = patientHistory.filter(p =>
+      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       p.mrn.toLowerCase().includes(searchQuery.toLowerCase())
   );
-
-  const runAgents = async (patient: Patient) => {
-    // Reset Agents
-    setSummaryAgent(prev => ({ ...prev, status: 'thinking', content: '' }));
-    setRiskAgent(prev => ({ ...prev, status: 'thinking', content: '' }));
-    setCodingAgent(prev => ({ ...prev, status: 'thinking', content: '' }));
-
-    // 1. Summarizer Agent
-    generateAgentResponse(
-      'Clinical Summarizer',
-      'You are an expert Medical Scribe. Create a concise SOAP note summary based on the provided patient JSON. Use professional medical abbreviations.',
-      patient
-    ).then(res => {
-      setSummaryAgent(res);
-      addToLedger('Agent:Summarizer', 'Generated SOAP Note');
-    });
-
-    // 2. Risk Agent
-    generateAgentResponse(
-      'Risk Predictor',
-      'You are a Clinical Risk AI. Analyze vitals, conditions, and meds. Output a Risk Score (0-100) and a brief 1-sentence rationale for the score. Format: "Risk Score: X/100. Rationale: ..."',
-      patient
-    ).then(res => {
-      setRiskAgent(res);
-      addToLedger('Agent:Risk', 'Calculated Risk Score');
-    });
-
-    // 3. Coding Agent
-    generateAgentResponse(
-      'Coding Assistant',
-      'You are a Medical Coder. Suggest ICD-10 codes for the conditions and CPT codes for a standard office visit level 4 based on this data. Format as a bulleted list.',
-      patient
-    ).then(res => {
-      setCodingAgent(res);
-      addToLedger('Agent:Coder', 'Generated Billing Codes');
-    });
-  };
 
   // --- Render ---
 
@@ -251,51 +200,14 @@ const App: React.FC = () => {
            </div>
         </div>
 
-        {/* Center Column: Intelligence (Agents) */}
-        <div className="col-span-6 bg-slate-925 flex flex-col p-6 overflow-y-auto">
-          <div className="mb-6 flex items-end justify-between border-b border-slate-800/50 pb-4">
-            <div>
-                 <h2 className="text-xl font-light text-white">Clinical Intelligence Swarm</h2>
-                 <span className="text-xs text-slate-500">Processing Node: Gemini 2.5 Flash</span>
-            </div>
-            
-            {/* Active Patient Info Display (Mini) */}
-            {currentPatient && (
-                <div className="text-right">
-                    <div className="text-lg font-medium text-cyan-400">{currentPatient.name}</div>
-                    <div className="text-xs text-slate-500 font-mono tracking-wider">{currentPatient.mrn} | {currentPatient.gender} | DOB: {currentPatient.dob}</div>
-                </div>
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 mb-4">
-             {/* Primary Agent: Summarizer */}
-             <div className="h-64">
-               <AgentCard 
-                 output={summaryAgent} 
-                 icon={<FileText size={18} />}
-                 colorClass="border-cyan-800/50 bg-slate-900/80 shadow-cyan-900/20" 
-               />
-             </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4 flex-1">
-             {/* Secondary Agents */}
-             <div className="h-64">
-               <AgentCard 
-                 output={riskAgent} 
-                 icon={<AlertOctagon size={18} />}
-                 colorClass="border-red-900/30 bg-slate-900/50"
-               />
-             </div>
-             <div className="h-64">
-               <AgentCard 
-                 output={codingAgent} 
-                 icon={<BrainCircuit size={18} />}
-                 colorClass="border-purple-900/30 bg-slate-900/50"
-               />
-             </div>
-          </div>
+        {/* Center Column: Surgical Dashboard */}
+        <div className="col-span-6 bg-slate-925 overflow-hidden">
+          <SurgicalDashboard
+            onSearch={(mrn) => {
+              // Trigger extension fetch
+              console.log('Fetching MRN:', mrn);
+            }}
+          />
         </div>
 
         {/* Right Column: Audit (Mirror Ledger) */}

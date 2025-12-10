@@ -55,17 +55,34 @@ def extract_patient_id(endpoint: str) -> Optional[str]:
     """Extract patient ID from AthenaNet API endpoint."""
     patterns = [
         r'/chart/patient/(\d+)',
+        r'/chart/(\d+)',
         r'/patients/(\d+)',
         r'/patient/(\d+)',
-        r'patientid=(\d+)',
-        r'patient_id=(\d+)',
+        r'/encounter/(\d+)',
+        r'patientid[=/](\d+)',
+        r'patient_id[=/](\d+)',
+        r'patient[=/](\d+)',
+        r'chartid[=/](\d+)',
+        r'/api/\d+/chart/(\d+)',
+        r'/api/v\d+/patients?/(\d+)',
+        # AthenaNet specific patterns
+        r'athena[^/]*/(\d{5,})',  # Athena IDs are typically 5+ digits
+        r'/(\d{6,})/(?:vitals|meds|problems|labs|allergies)',  # ID before resource type
     ]
 
     for pattern in patterns:
         match = re.search(pattern, endpoint, re.IGNORECASE)
         if match:
+            logger.debug(f"[FHIR] Patient ID extracted: {match.group(1)} from pattern: {pattern}")
             return match.group(1)
 
+    # Fallback: look for any 6+ digit number that might be a patient ID
+    fallback = re.search(r'/(\d{6,})(?:/|$|\?)', endpoint)
+    if fallback:
+        logger.debug(f"[FHIR] Patient ID extracted (fallback): {fallback.group(1)}")
+        return fallback.group(1)
+
+    logger.debug(f"[FHIR] No patient ID found in: {endpoint[:100]}")
     return None
 
 
@@ -242,14 +259,20 @@ def convert_problems(payload: Any) -> List[FHIRCondition]:
     if isinstance(payload, list):
         prob_list = payload
     elif isinstance(payload, dict):
-        prob_list = payload.get('problems') or payload.get('diagnoses') or payload.get('conditions') or []
-        if not prob_list and 'problem' in payload:
-            prob_list = [payload]
+        # Handle IMO Health categorized format: {'categories': [{'problems': [...]}]}
+        if 'categories' in payload:
+            for category in payload.get('categories', []):
+                cat_problems = category.get('problems', [])
+                prob_list.extend(cat_problems)
+        else:
+            prob_list = payload.get('problems') or payload.get('diagnoses') or payload.get('conditions') or []
+            if not prob_list and 'problem' in payload:
+                prob_list = [payload]
 
     for prob in prob_list:
         if isinstance(prob, dict):
-            code = prob.get('icd10') or prob.get('code') or prob.get('diagnosisCode') or ''
-            display = prob.get('description') or prob.get('name') or prob.get('problemName') or ''
+            code = prob.get('icd10') or prob.get('code') or prob.get('diagnosisCode') or prob.get('lexical_code') or ''
+            display = prob.get('description') or prob.get('title') or prob.get('name') or prob.get('problemName') or ''
             status = prob.get('status', 'active')
             onset = normalize_date(prob.get('onsetDate') or prob.get('startDate'))
 
@@ -310,9 +333,9 @@ def convert_to_fhir(endpoint: str, method: str, payload: Any) -> Tuple[str, Any]
     if record_type == 'vital':
         return record_type, convert_vitals(payload)
     elif record_type == 'medication':
-        return record_type, {"medications": [m.model_dump() for m in convert_medications(payload)]}
+        return record_type, {"medications": [m.dict() for m in convert_medications(payload)]}
     elif record_type == 'problem':
-        return record_type, {"conditions": [c.model_dump() for c in convert_problems(payload)]}
+        return record_type, {"conditions": [c.dict() for c in convert_problems(payload)]}
     elif record_type == 'patient':
         patient_id = extract_patient_id(endpoint)
         return record_type, convert_patient(payload, patient_id)

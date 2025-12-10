@@ -15,6 +15,7 @@ import sys
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 from contextlib import asynccontextmanager
+from active_routes import router as active_router, set_main_cache
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -103,6 +104,9 @@ class ConnectionManager:
 
         # Patient data cache (in-memory, keyed by patient_id)
         self.patient_cache: Dict[str, Dict[str, Any]] = {}
+
+        # Current patient context (for associating data without patient ID in URL)
+        self.current_patient_id: Optional[str] = None
 
         # Statistics
         self.stats = {
@@ -221,7 +225,7 @@ class ConnectionManager:
             # Send log entry to frontend
             await self.broadcast_to_frontend({
                 "type": "LOG_ENTRY",
-                "data": log_entry.model_dump()
+                "data": log_entry.dict()
             })
             logger.info("LOG_ENTRY sent to frontend")
 
@@ -229,9 +233,15 @@ class ConnectionManager:
             patient_id = extract_patient_id(endpoint)
             if patient_id:
                 logger.info(f"  Patient ID extracted: {patient_id}")
+                # Update current patient context
+                self.current_patient_id = patient_id
                 await self.update_patient_cache(patient_id, record_type, fhir_resource)
+            elif self.current_patient_id and record_type != 'unknown':
+                # Use current patient context for clinical data without patient ID
+                logger.info(f"  Using current patient context: {self.current_patient_id}")
+                await self.update_patient_cache(self.current_patient_id, record_type, fhir_resource)
             else:
-                logger.debug("  No patient ID in endpoint")
+                logger.debug("  No patient ID in endpoint and no current context")
 
             self.stats['payloads_processed'] += 1
             logger.info(f"Payload processed successfully (Total: {self.stats['payloads_processed']})")
@@ -256,6 +266,15 @@ class ConnectionManager:
                 'vitals': None,
                 'medications': [],
                 'problems': [],
+                'labs': [],
+                'allergies': [],
+                'allergy': [],
+                'documents': [],
+                'notes': [],
+                'note': [],
+                'procedures': [],
+                'imaging': [],
+                'unknown': [],  # Store unclassified data for debugging
                 'last_update': None
             }
             self.stats['patients_cached'] += 1
@@ -267,15 +286,15 @@ class ConnectionManager:
         logger.debug(f"Updating cache section: {record_type}")
 
         if record_type == 'patient':
-            if hasattr(fhir_resource, 'model_dump'):
-                cache['patient'] = fhir_resource.model_dump()
+            if hasattr(fhir_resource, 'dict'):
+                cache['patient'] = fhir_resource.dict()
             else:
                 cache['patient'] = fhir_resource
             logger.info(f"  Patient demographics updated")
 
         elif record_type == 'vital':
-            if hasattr(fhir_resource, 'model_dump'):
-                cache['vitals'] = fhir_resource.model_dump()
+            if hasattr(fhir_resource, 'dict'):
+                cache['vitals'] = fhir_resource.dict()
             else:
                 cache['vitals'] = fhir_resource
             logger.info(f"  Vitals updated")
@@ -289,6 +308,47 @@ class ConnectionManager:
             if isinstance(fhir_resource, dict) and 'conditions' in fhir_resource:
                 cache['problems'] = fhir_resource['conditions']
                 logger.info(f"  Problems updated ({len(cache['problems'])} conditions)")
+
+        elif record_type == 'lab':
+            # Store lab results
+            if isinstance(fhir_resource, list):
+                cache['labs'].extend(fhir_resource)
+            else:
+                cache['labs'].append(fhir_resource)
+            logger.info(f"  Labs updated ({len(cache['labs'])} results)")
+
+        elif record_type == 'allergy':
+            # Store allergies
+            if isinstance(fhir_resource, list):
+                cache['allergies'].extend(fhir_resource)
+                cache['allergy'].extend(fhir_resource)
+            else:
+                cache['allergies'].append(fhir_resource)
+                cache['allergy'].append(fhir_resource)
+            logger.info(f"  Allergies updated ({len(cache['allergies'])} allergies)")
+
+        elif record_type == 'note':
+            # Store notes
+            if isinstance(fhir_resource, list):
+                cache['notes'].extend(fhir_resource)
+                cache['note'].extend(fhir_resource)
+            else:
+                cache['notes'].append(fhir_resource)
+                cache['note'].append(fhir_resource)
+            logger.info(f"  Notes updated ({len(cache['notes'])} notes)")
+
+        elif record_type == 'imaging':
+            # Store imaging
+            if isinstance(fhir_resource, list):
+                cache['imaging'].extend(fhir_resource)
+            else:
+                cache['imaging'].append(fhir_resource)
+            logger.info(f"  Imaging updated ({len(cache['imaging'])} studies)")
+
+        else:
+            # Store unknown types for debugging
+            cache['unknown'].append({'type': record_type, 'data': fhir_resource})
+            logger.debug(f"  Unknown record type '{record_type}' stored")
 
         cache['last_update'] = datetime.now().isoformat()
 
@@ -313,7 +373,7 @@ class ConnectionManager:
 
         await self.broadcast_to_frontend({
             "type": "PATIENT_UPDATE",
-            "data": patient.model_dump()
+            "data": patient.dict()
         })
 
     def set_mode(self, mode: str):
@@ -383,6 +443,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Include active fetch routes
+app.include_router(active_router)
+
+# Share the patient cache with active routes
+set_main_cache(manager.patient_cache)
+
 
 @app.get("/")
 async def root():
@@ -447,8 +513,12 @@ async def ingest_payload(request: Request, x_source: Optional[str] = Header(None
         logger.info(f"  Method: {method}")
         logger.info(f"  URL: {url[:80]}{'...' if len(url) > 80 else ''}")
         logger.info(f"  Source: {source}")
-        logger.info(f"  Patient ID: {patient_id or 'none'}")
+        logger.info(f"  Patient ID from extension: {patient_id or 'none'}")
         logger.info(f"  Size: {size} bytes")
+        logger.info(f"  Data type: {type(data).__name__}")
+        if isinstance(data, dict):
+            logger.info(f"  Data keys: {list(data.keys())[:10]}")
+        logger.info(f"  Frontend connections: {len(manager.frontend_connections)}")
 
         # Convert to internal format for processing
         internal_payload = {
@@ -571,7 +641,7 @@ async def get_patient(patient_id: str):
             problems_data=cache.get('problems')
         )
         logger.info(f"Patient found: {patient.name}")
-        return {"patient": patient.model_dump()}
+        return {"patient": patient.dict()}
 
     logger.warning(f"Patient not found: {patient_id}")
     return {"error": "Patient not found", "patient_id": patient_id}
@@ -591,7 +661,7 @@ async def list_patients():
             medications_data=cache.get('medications'),
             problems_data=cache.get('problems')
         )
-        patients.append(patient.model_dump())
+        patients.append(patient.dict())
 
     return {"patients": patients, "count": len(patients)}
 

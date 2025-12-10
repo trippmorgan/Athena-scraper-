@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      width: 320px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: 16px;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #334155;
+    }
+    .logo {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, #06b6d4, #3b82f6);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 14px;
+    }
+    .title { font-size: 14px; font-weight: 600; }
+    .subtitle { font-size: 11px; color: #64748b; }
+    
+    .status-card {
+      background: #1e293b;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    .status-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 0;
+    }
+    .status-label { font-size: 12px; color: #94a3b8; }
+    .status-value { font-size: 12px; font-weight: 500; }
+    .status-value.connected { color: #10b981; }
+    .status-value.disconnected { color: #ef4444; }
+    .status-value.active { color: #f97316; }
+    
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .stat-box {
+      background: #1e293b;
+      border-radius: 6px;
+      padding: 10px;
+      text-align: center;
+    }
+    .stat-number { font-size: 18px; font-weight: 600; color: #06b6d4; }
+    .stat-label { font-size: 10px; color: #64748b; margin-top: 2px; }
+    
+    .action-section {
+      background: #1e293b;
+      border-radius: 8px;
+      padding: 12px;
+    }
+    .action-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #64748b;
+      margin-bottom: 10px;
+    }
+    .mrn-input {
+      width: 100%;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      padding: 10px 12px;
+      color: #e2e8f0;
+      font-size: 13px;
+      margin-bottom: 10px;
+    }
+    .mrn-input:focus {
+      outline: none;
+      border-color: #06b6d4;
+    }
+    .btn-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+    }
+    .btn {
+      background: #334155;
+      border: none;
+      border-radius: 6px;
+      padding: 10px 8px;
+      color: #e2e8f0;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn:hover { background: #475569; }
+    .btn.primary { background: #0891b2; }
+    .btn.primary:hover { background: #06b6d4; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    
+    .log {
+      margin-top: 12px;
+      background: #0f172a;
+      border-radius: 6px;
+      padding: 8px;
+      font-family: monospace;
+      font-size: 10px;
+      color: #64748b;
+      max-height: 80px;
+      overflow-y: auto;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">S</div>
+    <div>
+      <div class="title">Shadow EHR Bridge</div>
+      <div class="subtitle">Clinical Data Integration</div>
+    </div>
+  </div>
+
+  <div class="status-card">
+    <div class="status-row">
+      <span class="status-label">Backend Connection</span>
+      <span id="backend-status" class="status-value">Checking...</span>
+    </div>
+    <div class="status-row">
+      <span class="status-label">Athena Session</span>
+      <span id="athena-status" class="status-value">Not detected</span>
+    </div>
+    <div class="status-row">
+      <span class="status-label">Mode</span>
+      <span id="mode-status" class="status-value">Passive</span>
+    </div>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat-box">
+      <div id="capture-count" class="stat-number">0</div>
+      <div class="stat-label">Captured</div>
+    </div>
+    <div class="stat-box">
+      <div id="active-count" class="stat-number">0</div>
+      <div class="stat-label">Active</div>
+    </div>
+    <div class="stat-box">
+      <div id="bytes-sent" class="stat-number">0</div>
+      <div class="stat-label">KB Sent</div>
+    </div>
+  </div>
+
+  <div class="action-section">
+    <div class="action-title">Active Fetch by MRN</div>
+    <input type="text" id="mrn-input" class="mrn-input" placeholder="Enter MRN...">
+    <div class="btn-grid">
+      <button id="btn-preop" class="btn primary">Pre-Op</button>
+      <button id="btn-intraop" class="btn">Intra-Op</button>
+      <button id="btn-postop" class="btn">Post-Op</button>
+    </div>
+  </div>
+
+  <div id="log" class="log">Ready...</div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

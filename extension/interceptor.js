@@ -20,13 +20,20 @@
       '/notes/',
       '/api/'
     ],
-    // Skip these (UI noise, static assets)
+    // Skip these (UI noise, static assets, telemetry)
     ignorePatterns: [
       '/static/',
       '/assets/',
       '/analytics/',
       '/tracking/',
       '/telemetry/',
+      'datadoghq.com',
+      'datadog',
+      'sentry.io',
+      'google-analytics',
+      'googletagmanager',
+      'hotjar',
+      'mixpanel',
       '.js',
       '.css',
       '.png',

@@ -1,10 +1,12 @@
-// background.js - Service worker that forwards data to local Python service
+// background.js - Service worker with Active Fetch support
+// Handles both passive interception relay AND active fetch commands
 
 const LOCAL_SERVICE_URL = 'http://localhost:8000';
 
 // State tracking
 let connectionStatus = 'disconnected';
 let captureCount = 0;
+let activeFetchCount = 0;
 let lastError = null;
 let bytesSent = 0;
 
@@ -12,7 +14,9 @@ let bytesSent = 0;
 let pendingQueue = [];
 const MAX_QUEUE_SIZE = 100;
 
-// Logger utility
+// Track tabs with active Athena sessions
+const athenaTabs = new Map();
+
 const Logger = {
   _log: (level, emoji, msg, data) => {
     const time = new Date().toLocaleTimeString('en-US', { hour12: false });
@@ -23,7 +27,8 @@ const Logger = {
       warn: "color: #f59e0b; font-weight: bold;",
       error: "color: #ef4444; font-weight: bold;",
       debug: "color: #8b5cf6;",
-      data: "color: #22c55e; font-weight: bold;"
+      data: "color: #22c55e; font-weight: bold;",
+      active: "color: #f97316; font-weight: bold;"
     };
     const style = styles[level] || styles.info;
     data ? console.log(`%c${prefix} ${emoji} ${msg}`, style, data) : console.log(`%c${prefix} ${emoji} ${msg}`, style);
@@ -34,6 +39,7 @@ const Logger = {
   error: (msg, data) => Logger._log('error', '❌', msg, data),
   debug: (msg, data) => Logger._log('debug', '🔍', msg, data),
   data: (msg, data) => Logger._log('data', '📦', msg, data),
+  active: (msg, data) => Logger._log('active', '🎯', msg, data),
   separator: () => console.log('%c' + '═'.repeat(60), 'color: #475569;')
 };
 
@@ -43,11 +49,16 @@ Logger.info('Target service:', LOCAL_SERVICE_URL);
 Logger.separator();
 
 // Update badge based on status
-function updateBadge() {
+function updateBadge(mode = 'passive') {
   if (chrome.action) {
     if (connectionStatus === 'connected') {
-      chrome.action.setBadgeText({ text: 'ON' });
-      chrome.action.setBadgeBackgroundColor({ color: '#10b981' });
+      if (mode === 'active') {
+        chrome.action.setBadgeText({ text: 'ACT' });
+        chrome.action.setBadgeBackgroundColor({ color: '#f97316' }); // Orange for active
+      } else {
+        chrome.action.setBadgeText({ text: 'ON' });
+        chrome.action.setBadgeBackgroundColor({ color: '#10b981' });
+      }
     } else if (connectionStatus === 'error') {
       chrome.action.setBadgeText({ text: 'ERR' });
       chrome.action.setBadgeBackgroundColor({ color: '#ef4444' });
@@ -62,7 +73,6 @@ async function sendToLocalService(payload) {
   const payloadJson = JSON.stringify(payload);
   const payloadSize = new TextEncoder().encode(payloadJson).length;
 
-  Logger.separator();
   Logger.data('SENDING TO BACKEND', {
     url: payload.url?.substring(0, 60) + '...',
     method: payload.method,
@@ -87,20 +97,13 @@ async function sendToLocalService(payload) {
       bytesSent += payloadSize;
       lastError = null;
 
-      Logger.success('PAYLOAD DELIVERED', {
-        totalCaptures: captureCount,
-        totalBytes: `${(bytesSent / 1024).toFixed(2)} KB`,
-        queueSize: pendingQueue.length
-      });
-
       if (oldStatus !== 'connected') {
         updateBadge();
       }
 
-      // Process any queued items
+      // Process queued items
       while (pendingQueue.length > 0) {
         const queued = pendingQueue.shift();
-        Logger.info(`Processing queued item (${pendingQueue.length} remaining)`);
         try {
           await fetch(`${LOCAL_SERVICE_URL}/ingest`, {
             method: 'POST',
@@ -108,7 +111,6 @@ async function sendToLocalService(payload) {
             body: JSON.stringify(queued)
           });
         } catch (e) {
-          Logger.warn('Failed to send queued item, re-queuing');
           pendingQueue.unshift(queued);
           break;
         }
@@ -123,58 +125,178 @@ async function sendToLocalService(payload) {
     lastError = error.message;
     updateBadge();
 
-    Logger.error('DELIVERY FAILED', {
-      error: error.message,
-      queueSize: pendingQueue.length
-    });
-
-    // Queue for retry (if not full)
     if (pendingQueue.length < MAX_QUEUE_SIZE) {
       pendingQueue.push(payload);
-      Logger.info(`Queued for retry (${pendingQueue.length}/${MAX_QUEUE_SIZE})`);
-    } else {
-      Logger.warn('Queue full, dropping payload');
     }
 
     return false;
   }
 }
 
-// Listen for messages from content script
+// ============================================================
+// ACTIVE FETCH - Send commands to content script
+// ============================================================
+
+async function sendActiveFetchCommand(tabId, action, payload) {
+  Logger.active('ACTIVE FETCH COMMAND', { tabId, action, payload });
+  activeFetchCount++;
+  updateBadge('active');
+
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error('Active fetch timeout'));
+    }, 30000); // 30 second timeout
+
+    // Store callback for response
+    const callbackId = `${action}_${Date.now()}`;
+    activeFetchCallbacks.set(callbackId, { resolve, reject, timeout });
+
+    // Send command to content script
+    chrome.tabs.sendMessage(tabId, {
+      type: 'ACTIVE_FETCH_COMMAND',
+      action,
+      payload,
+      callbackId
+    }, (response) => {
+      if (chrome.runtime.lastError) {
+        clearTimeout(timeout);
+        activeFetchCallbacks.delete(callbackId);
+        reject(new Error(chrome.runtime.lastError.message));
+      }
+    });
+  });
+}
+
+const activeFetchCallbacks = new Map();
+
+// Find an active Athena tab
+function findAthenaTab() {
+  for (const [tabId, info] of athenaTabs) {
+    if (info.active) return tabId;
+  }
+  return null;
+}
+
+// ============================================================
+// MESSAGE HANDLERS
+// ============================================================
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const tabId = sender.tab?.id || 'unknown';
 
-  Logger.debug(`Message from tab ${tabId}:`, { type: message.type });
+  // Track Athena tabs
+  if (sender.tab?.url?.includes('athenahealth.com')) {
+    athenaTabs.set(tabId, { active: true, url: sender.tab.url });
+  }
 
+  // Handle passive interception (existing)
   if (message.type === 'API_CAPTURE') {
-    Logger.separator();
-    Logger.data('CAPTURE RECEIVED', {
+    Logger.data('PASSIVE CAPTURE', {
       source: message.payload?.source,
       method: message.payload?.method,
-      url: message.payload?.url?.substring(0, 50) + '...',
-      patientId: message.payload?.patientId
+      url: message.payload?.url?.substring(0, 50) + '...'
     });
 
     sendToLocalService(message.payload);
     sendResponse({ received: true, queued: connectionStatus !== 'connected' });
   }
 
+  // Handle active fetch results from content script
+  if (message.type === 'ACTIVE_FETCH_RESULT') {
+    Logger.active('ACTIVE FETCH RESULT', {
+      action: message.action,
+      success: message.payload?.success !== false,
+      callbackId: message.callbackId
+    });
+
+    const callback = activeFetchCallbacks.get(message.callbackId);
+    if (callback) {
+      clearTimeout(callback.timeout);
+      activeFetchCallbacks.delete(message.callbackId);
+      callback.resolve(message.payload);
+    }
+
+    // Also forward to backend
+    sendToLocalService({
+      url: `active-fetch/${message.action}`,
+      method: 'ACTIVE',
+      data: message.payload,
+      source: 'active-fetch',
+      timestamp: new Date().toISOString(),
+      size: JSON.stringify(message.payload).length
+    });
+
+    sendResponse({ received: true });
+    updateBadge('passive'); // Reset badge
+  }
+
+  // Handle requests from frontend to initiate active fetch
+  if (message.type === 'INITIATE_ACTIVE_FETCH') {
+    const athenaTabId = findAthenaTab();
+    
+    if (!athenaTabId) {
+      Logger.error('No active Athena tab found');
+      sendResponse({ error: 'No active Athena session. Please open AthenaNet.' });
+      return true;
+    }
+
+    sendActiveFetchCommand(athenaTabId, message.action, message.payload)
+      .then(result => {
+        sendResponse({ success: true, data: result });
+      })
+      .catch(error => {
+        sendResponse({ success: false, error: error.message });
+      });
+
+    return true; // Keep channel open for async response
+  }
+
+  // Status request
   if (message.type === 'GET_STATUS') {
     const status = {
       connectionStatus,
       captureCount,
+      activeFetchCount,
       bytesSent,
       queueSize: pendingQueue.length,
-      lastError
+      lastError,
+      athenaTabs: Array.from(athenaTabs.keys())
     };
-    Logger.info('Status requested:', status);
     sendResponse(status);
   }
 
-  return true; // Keep channel open for async
+  return true;
 });
 
-// Health check ping every 10 seconds
+// Track tab closures
+chrome.tabs.onRemoved.addListener((tabId) => {
+  if (athenaTabs.has(tabId)) {
+    athenaTabs.delete(tabId);
+    Logger.info(`Athena tab ${tabId} closed`);
+  }
+});
+
+// ============================================================
+// EXTERNAL MESSAGE HANDLER (from frontend WebSocket)
+// ============================================================
+
+// Listen for messages from the frontend via native messaging or fetch
+chrome.runtime.onMessageExternal?.addListener((message, sender, sendResponse) => {
+  Logger.info('External message received:', message);
+  
+  if (message.type === 'ACTIVE_FETCH') {
+    const athenaTabId = findAthenaTab();
+    if (athenaTabId) {
+      sendActiveFetchCommand(athenaTabId, message.action, message.payload)
+        .then(sendResponse)
+        .catch(e => sendResponse({ error: e.message }));
+      return true;
+    }
+    sendResponse({ error: 'No Athena tab' });
+  }
+});
+
+// Health check ping
 setInterval(async () => {
   try {
     const res = await fetch(`${LOCAL_SERVICE_URL}/health`, {
@@ -186,12 +308,11 @@ setInterval(async () => {
     connectionStatus = res.ok ? 'connected' : 'error';
 
     if (oldStatus !== connectionStatus) {
-      Logger.info(`Connection status: ${oldStatus} -> ${connectionStatus}`);
+      Logger.info(`Connection: ${oldStatus} -> ${connectionStatus}`);
       updateBadge();
     }
   } catch (e) {
     if (connectionStatus !== 'disconnected') {
-      Logger.warn('Backend unreachable');
       connectionStatus = 'disconnected';
       updateBadge();
     }
@@ -200,7 +321,7 @@ setInterval(async () => {
 
 // Initial health check
 setTimeout(async () => {
-  Logger.info('Performing initial health check...');
+  Logger.info('Initial health check...');
   try {
     const res = await fetch(`${LOCAL_SERVICE_URL}/health`);
     connectionStatus = res.ok ? 'connected' : 'disconnected';
@@ -212,4 +333,4 @@ setTimeout(async () => {
   updateBadge();
 }, 1000);
 
-Logger.success('Background service worker ready');
+Logger.success('Background service worker ready (Passive + Active modes)');

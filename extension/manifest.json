@@ -1,11 +1,12 @@
 {
   "manifest_version": 3,
   "name": "AthenaNet Clinical Bridge",
-  "version": "1.0.0",
-  "description": "Clinical data integration layer for Shadow EHR",
+  "version": "2.0.0",
+  "description": "Clinical data integration layer for Shadow EHR - Passive + Active modes",
   "permissions": [
     "storage",
-    "activeTab"
+    "activeTab",
+    "tabs"
   ],
   "host_permissions": [
     "https://*.athenahealth.com/*",
@@ -28,7 +29,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["interceptor.js"],
+      "resources": ["interceptor.js", "activeFetcher.js"],
       "matches": [
         "https://*.athenahealth.com/*",
         "https://*.athenanet.athenahealth.com/*"
@@ -36,6 +37,10 @@
     }
   ],
   "action": {
-    "default_title": "AthenaNet Bridge Status"
+    "default_title": "AthenaNet Bridge - Click for status",
+    "default_popup": "popup.html"
+  },
+  "externally_connectable": {
+    "matches": ["http://localhost:*/*", "http://127.0.0.1:*/*"]
   }
 }
