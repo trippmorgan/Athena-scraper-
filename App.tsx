@@ -19,6 +19,44 @@ import {
   History
 } from 'lucide-react';
 
+// Extension ID - Get this from chrome://extensions after loading the extension
+// You can also set this via environment variable: VITE_EXTENSION_ID
+const EXTENSION_ID = import.meta.env.VITE_EXTENSION_ID || '';
+
+// Utility to send messages to the Chrome extension
+const sendToExtension = async (action: string, payload: any): Promise<any> => {
+  return new Promise((resolve, reject) => {
+    // Check if Chrome extension API is available
+    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+      if (!EXTENSION_ID) {
+        console.warn('Extension ID not configured. Set VITE_EXTENSION_ID in .env');
+        reject(new Error('Extension ID not configured'));
+        return;
+      }
+
+      chrome.runtime.sendMessage(
+        EXTENSION_ID,
+        { type: 'INITIATE_ACTIVE_FETCH', action, payload },
+        (response) => {
+          if (chrome.runtime.lastError) {
+            console.error('Extension error:', chrome.runtime.lastError);
+            reject(new Error(chrome.runtime.lastError.message));
+          } else {
+            console.log('Extension response:', response);
+            resolve(response);
+          }
+        }
+      );
+    } else {
+      console.warn('Chrome extension API not available. Make sure:');
+      console.warn('1. You are using Chrome browser');
+      console.warn('2. The AthenaNet Bridge extension is installed');
+      console.warn('3. Extension ID is set in VITE_EXTENSION_ID');
+      reject(new Error('Chrome extension API not available'));
+    }
+  });
+};
+
 const App: React.FC = () => {
   // --- State ---
   const [scraperMode, setScraperMode] = useState<ScraperMode>(ScraperMode.PASSIVE);
@@ -203,9 +241,20 @@ const App: React.FC = () => {
         {/* Center Column: Surgical Dashboard */}
         <div className="col-span-6 bg-slate-925 overflow-hidden">
           <SurgicalDashboard
-            onSearch={(mrn) => {
-              // Trigger extension fetch
-              console.log('Fetching MRN:', mrn);
+            onSearch={async (mrn) => {
+              // Trigger active fetch via Chrome extension
+              console.log('🎯 Initiating active fetch for MRN:', mrn);
+              addToLedger('ActiveFetch', `Requesting data for MRN: ${mrn}`);
+
+              try {
+                const result = await sendToExtension('FETCH_BY_MRN', { mrn });
+                console.log('✅ Extension fetch result:', result);
+                addToLedger('ActiveFetch', `Data received for MRN: ${mrn}`);
+              } catch (error) {
+                console.warn('⚠️ Extension fetch failed:', error);
+                addToLedger('ActiveFetch', `Extension unavailable - using passive mode`);
+                // The SurgicalDashboard will poll the backend anyway
+              }
             }}
           />
         </div>

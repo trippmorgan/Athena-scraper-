@@ -374,6 +374,7 @@ conda env create -f environment.yml
 # Activate environment
 conda activate shadow-ehr
 ```
+uvicorn main:app --reload --port 8000
 
 **Option B: Using pip with venv**
 ```bash
@@ -388,6 +389,8 @@ source venv/bin/activate
 
 # Install dependencies
 pip install fastapi uvicorn websockets pydantic python-dotenv
+pip install fastapi>=0.100.0 uvicorn>=0.23.0 pydantic>=2.0.0 google-genai>=0.2.0 python-multipart>=0.0.6
+pip install python-dotenv
 ```
 
 #### Step 4: Configure Environment Variables

@@ -8,6 +8,14 @@ This is the Normalization Engine (Tier 2) that:
 4. Relays processed data to the frontend
 """
 
+# Load environment variables FIRST before any other imports
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load .env from project root (parent of backend/)
+env_path = Path(__file__).parent.parent / ".env"
+load_dotenv(env_path, override=True)
+
 import asyncio
 import json
 import logging
@@ -19,6 +27,7 @@ from active_routes import router as active_router, set_main_cache
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from vision_discovery import router as discovery_router
 
 from schemas import (
     AthenaPayload, Patient, LogEntry, WebSocketMessage, ScraperMode
@@ -27,7 +36,6 @@ from fhir_converter import (
     convert_to_fhir, extract_patient_id, create_log_entry,
     build_patient_from_aggregated_data
 )
-
 # ============================================================================
 # LOGGING CONFIGURATION
 # ============================================================================
@@ -445,6 +453,7 @@ app.add_middleware(
 
 # Include active fetch routes
 app.include_router(active_router)
+app.include_router(discovery_router)
 
 # Share the patient cache with active routes
 set_main_cache(manager.patient_cache)

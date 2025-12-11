@@ -128,7 +128,17 @@
   const originalFetch = window.fetch;
   window.fetch = async function(...args) {
     const [resource, options = {}] = args;
-    const url = resource instanceof Request ? resource.url : resource;
+    // Safely extract URL - handle Request objects, strings, and URL objects
+    let url;
+    if (resource instanceof Request) {
+      url = resource.url;
+    } else if (resource instanceof URL) {
+      url = resource.href;
+    } else if (typeof resource === 'string') {
+      url = resource;
+    } else {
+      url = String(resource || '');
+    }
     const method = options.method || (resource instanceof Request ? resource.method : 'GET');
 
     Logger.debug(`fetch() ${method} ${url.substring(0, 50)}...`);

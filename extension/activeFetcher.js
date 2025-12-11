@@ -27,30 +27,49 @@
 
   // ============================================================
   // ATHENA ENDPOINT CONFIGURATION
-  // These need to be discovered by inspecting network traffic
-  // Update these patterns based on your Athena instance
+  // Discovered from actual AthenaNet traffic analysis
+  // Pattern: /{practiceId}/{departmentId}/ax/{endpoint}
   // ============================================================
   const ATHENA_CONFIG = {
-    // Base URL pattern - update to match your Athena instance
-    baseUrl: '', // Will be auto-detected from current page
-    
-    // Search endpoint to convert MRN -> Internal Patient ID
-    searchEndpoint: '/api/v1/patients/search',
-    
-    // Data endpoints - {patientId} will be replaced
+    // Base URL pattern - auto-detected from current page
+    baseUrl: '', // Will be auto-detected
+
+    // Practice and department IDs - discovered from your instance
+    // These may vary by user/practice - will try to auto-detect
+    practiceId: '8042',
+    departmentId: '65',
+
+    // Search endpoint - Athena uses chart IDs, not simple MRN search
+    // The chart ID is typically visible in the URL when viewing a patient
+    searchEndpoint: null, // No simple search - use chart ID from URL
+
+    // Real Athena endpoints - {chartId} = patient chart ID, {encounterId} = encounter ID
+    // Note: originating_page parameter is required by Athena's backend
     endpoints: {
-      demographics: '/api/v1/chart/{patientId}/demographics',
-      medications: '/api/v1/chart/{patientId}/medications',
-      problems: '/api/v1/chart/{patientId}/problems',
-      allergies: '/api/v1/chart/{patientId}/allergies',
-      vitals: '/api/v1/chart/{patientId}/vitals',
-      labs: '/api/v1/chart/{patientId}/labs',
-      documents: '/api/v1/chart/{patientId}/documents',
-      encounters: '/api/v1/chart/{patientId}/encounters',
-      orders: '/api/v1/chart/{patientId}/orders',
-      procedures: '/api/v1/chart/{patientId}/procedures',
-      imaging: '/api/v1/chart/{patientId}/imaging',
-      notes: '/api/v1/chart/{patientId}/notes'
+      // Chart-level data (using /ax/data pattern with query params)
+      securityLabels: '/{practiceId}/{departmentId}/ax/security_label/chart/{chartId}/security_labels',
+      activeProblems: '/{practiceId}/{departmentId}/ax/data?sources=active_problems&sources=chart_overview_problems&originating_page=chartoverview&chart_id={chartId}',
+      activeMedications: '/{practiceId}/{departmentId}/ax/data?sources=active_medications&request_priority=HIGH&originating_page=chartoverview&chart_id={chartId}',
+      allergies: '/{practiceId}/{departmentId}/ax/data?sources=allergies&originating_page=chartoverview&chart_id={chartId}',
+      vitals: '/{practiceId}/{departmentId}/ax/data?sources=measurements&originating_page=chartoverview&chart_id={chartId}',
+      historicalProblems: '/{practiceId}/{departmentId}/ax/data?sources=historical_problems&originating_page=chartoverview&chart_id={chartId}',
+      demographics: '/{practiceId}/{departmentId}/ax/data?sources=demographics&originating_page=chartoverview&chart_id={chartId}',
+
+      // Document endpoints
+      documents: '/{practiceId}/{departmentId}/ax/data?sources=external_document_links&originating_page=chartoverview&chart_id={chartId}',
+
+      // Medication endpoints
+      coumadin: '/{practiceId}/{departmentId}/ax/medications/persistence/chart_has_classic_coumadin_flowsheet?chart_id={chartId}',
+
+      // Encounter-level data (requires encounterId)
+      encounterDocs: '/{practiceId}/{departmentId}/ax/encounter/{encounterId}/image_documentation',
+      encounterImages: '/{practiceId}/{departmentId}/ax/encounter/{encounterId}/jotter_images',
+      encounterSummary: '/{practiceId}/{departmentId}/ax/encounter/generate_summary',
+
+      // External APIs (different domains)
+      problems: 'https://api.imohealth.com/problemlistmanagement/problems/categorize',
+      clinicalData: 'https://hospitalclinicalnano.api.athena.io/clinicals-external-data/api/v1/external',
+      patientRisk: 'https://patientrisk.api.athena.io/patient-ra-gaps_prode1/api/v1/ragaps/count'
     },
 
     // Vascular-specific document filters
@@ -61,11 +80,81 @@
     }
   };
 
-  // Auto-detect base URL from current page
+  // Auto-detect base URL and IDs from current page
   function detectBaseUrl() {
     const url = new URL(window.location.href);
     ATHENA_CONFIG.baseUrl = `${url.protocol}//${url.host}`;
     Logger.info('Base URL detected:', ATHENA_CONFIG.baseUrl);
+
+    // Try to extract practice/department IDs from URL path
+    // Pattern: /8042/65/... or similar
+    const pathMatch = url.pathname.match(/^\/(\d+)\/(\d+)\//);
+    if (pathMatch) {
+      ATHENA_CONFIG.practiceId = pathMatch[1];
+      ATHENA_CONFIG.departmentId = pathMatch[2];
+      Logger.info('Practice/Department IDs detected:', {
+        practiceId: ATHENA_CONFIG.practiceId,
+        departmentId: ATHENA_CONFIG.departmentId
+      });
+    }
+  }
+
+  // Extract chart ID (patient ID) from current Athena URL
+  function extractChartIdFromUrl() {
+    const url = window.location.href;
+
+    // Common Athena URL patterns for patient charts:
+    // /chart/14077167/...
+    // /ax/security_label/chart/14077167/...
+    // ?chartid=14077167
+    // ?chart_id=14077167
+    // ?patientid=14077167
+
+    const patterns = [
+      /\/chart\/(\d+)/i,
+      /chart[_-]?id[=:](\d+)/i,
+      /patient[_-]?id[=:](\d+)/i,
+      /\/(\d{6,12})(?:\/|$|\?)/  // 6-12 digit number in path
+    ];
+
+    for (const pattern of patterns) {
+      const match = url.match(pattern);
+      if (match) {
+        Logger.info('Chart ID extracted from URL:', match[1]);
+        return match[1];
+      }
+    }
+
+    // Also check for chart ID in page content (DOM)
+    const chartElement = document.querySelector('[data-chartid], [data-chart-id], [data-patientid]');
+    if (chartElement) {
+      const chartId = chartElement.getAttribute('data-chartid') ||
+                      chartElement.getAttribute('data-chart-id') ||
+                      chartElement.getAttribute('data-patientid');
+      if (chartId) {
+        Logger.info('Chart ID extracted from DOM:', chartId);
+        return chartId;
+      }
+    }
+
+    Logger.warn('Could not extract chart ID from current page');
+    return null;
+  }
+
+  // Build endpoint URL with current practice/department/chart IDs
+  function buildEndpointUrl(endpointTemplate, chartId, encounterId) {
+    let url = endpointTemplate
+      .replace('{practiceId}', ATHENA_CONFIG.practiceId)
+      .replace('{departmentId}', ATHENA_CONFIG.departmentId)
+      .replace('{chartId}', chartId || '')
+      .replace('{encounterId}', encounterId || '');
+
+    // For relative URLs, prepend base URL
+    if (url.startsWith('/')) {
+      url = ATHENA_CONFIG.baseUrl + url;
+    }
+
+    return url;
   }
 
   // ============================================================
@@ -147,20 +236,34 @@
   // BATCH FETCH - Core Active Extraction
   // ============================================================
 
-  async function fetchAllPatientData(patientId, options = {}) {
+  async function fetchAllPatientData(chartId, options = {}) {
     Logger.info('═'.repeat(50));
-    Logger.info('BATCH FETCH INITIATED', { patientId, options });
-    
+    Logger.info('BATCH FETCH INITIATED', { chartId, options });
+
+    if (!chartId) {
+      Logger.error('No chart ID provided - cannot fetch data');
+      return { error: 'No chart ID provided' };
+    }
+
     const endpoints = ATHENA_CONFIG.endpoints;
     const fetchPromises = [];
     const results = {};
 
-    // Determine which endpoints to fetch
-    const endpointsToFetch = options.endpoints || Object.keys(endpoints);
+    // Determine which endpoints to fetch (only chart-level, skip encounter-level unless we have encounterId)
+    const chartEndpoints = ['securityLabels', 'activeProblems', 'activeMedications', 'allergies', 'vitals', 'demographics'];
+    const endpointsToFetch = options.endpoints || chartEndpoints;
 
     for (const key of endpointsToFetch) {
       if (endpoints[key]) {
-        const url = endpoints[key].replace('{patientId}', patientId);
+        // Use the new buildEndpointUrl function with proper placeholders
+        const url = buildEndpointUrl(endpoints[key], chartId, options.encounterId);
+
+        // Skip external APIs for now (they require different auth)
+        if (url.startsWith('https://api.') || url.startsWith('https://hospital') || url.startsWith('https://patient')) {
+          Logger.info(`Skipping external API: ${key}`);
+          continue;
+        }
+
         fetchPromises.push(
           authenticatedFetch(url).then(result => {
             results[key] = result;
@@ -174,12 +277,36 @@
 
     Logger.info('═'.repeat(50));
     Logger.success('BATCH FETCH COMPLETE', {
-      total: endpointsToFetch.length,
+      total: fetchPromises.length,
       successful: Object.values(results).filter(r => r.success).length,
       failed: Object.values(results).filter(r => !r.success).length
     });
 
     return results;
+  }
+
+  // Fetch data for currently viewed patient (uses URL extraction)
+  async function fetchCurrentPatientData(options = {}) {
+    Logger.info('Fetching data for current patient from URL');
+
+    const chartId = extractChartIdFromUrl();
+    if (!chartId) {
+      return {
+        success: false,
+        error: 'No patient chart found - navigate to a patient chart in Athena first'
+      };
+    }
+
+    Logger.success('Found chart ID:', chartId);
+    const data = await fetchAllPatientData(chartId, options);
+
+    return {
+      success: true,
+      chartId,
+      data,
+      source: 'url_extraction',
+      timestamp: new Date().toISOString()
+    };
   }
 
   // ============================================================
@@ -345,38 +472,74 @@
           break;
 
         case 'FETCH_ALL':
-          result = await fetchAllPatientData(payload.patientId);
+          result = await fetchAllPatientData(payload.patientId || payload.chartId);
+          break;
+
+        case 'FETCH_CURRENT':
+          // Fetch data for currently viewed patient (extracts chart ID from URL)
+          result = await fetchCurrentPatientData(payload);
           break;
 
         case 'FETCH_BY_MRN':
-          // Combined: Search + Fetch All
-          const searchResult = await searchPatientByMRN(payload.mrn);
-          if (searchResult.success) {
+          // Strategy: First try to use MRN/chartId directly if it looks like a chart ID
+          // Athena chart IDs are typically 8-digit numbers
+          const providedId = payload.mrn || payload.chartId;
+
+          if (providedId && /^\d{6,10}$/.test(providedId)) {
+            // Looks like a chart ID - try direct fetch
+            Logger.info('Input looks like chart ID - fetching directly:', providedId);
+            const directData = await fetchAllPatientData(providedId);
             result = {
-              patientId: searchResult.patientId,
-              data: await fetchAllPatientData(searchResult.patientId)
+              success: true,
+              chartId: providedId,
+              data: directData,
+              source: 'direct_chartid'
             };
           } else {
-            result = searchResult;
+            // Try MRN search first
+            Logger.info('Trying MRN search:', providedId);
+            const searchResult = await searchPatientByMRN(providedId);
+
+            if (searchResult.success) {
+              result = {
+                success: true,
+                chartId: searchResult.patientId,
+                data: await fetchAllPatientData(searchResult.patientId),
+                source: 'mrn_search'
+              };
+            } else {
+              // Fall back to current page extraction
+              Logger.warn('MRN search failed - trying URL extraction');
+              result = await fetchCurrentPatientData();
+            }
           }
           break;
 
         case 'FETCH_PREOP':
-          result = await fetchPreOpData(payload.patientId);
+          result = await fetchPreOpData(payload.patientId || payload.chartId);
           break;
 
         case 'FETCH_INTRAOP':
-          result = await fetchIntraOpData(payload.patientId);
+          result = await fetchIntraOpData(payload.patientId || payload.chartId);
           break;
 
         case 'FETCH_POSTOP':
-          result = await fetchPostOpData(payload.patientId);
+          result = await fetchPostOpData(payload.patientId || payload.chartId);
           break;
 
         case 'CONFIGURE_ENDPOINTS':
           // Allow runtime endpoint configuration
           Object.assign(ATHENA_CONFIG.endpoints, payload.endpoints);
           result = { success: true, endpoints: ATHENA_CONFIG.endpoints };
+          break;
+
+        case 'GET_CONFIG':
+          // Return current configuration for debugging
+          result = {
+            success: true,
+            config: ATHENA_CONFIG,
+            currentChartId: extractChartIdFromUrl()
+          };
           break;
 
         default:
@@ -396,16 +559,45 @@
 
   detectBaseUrl();
   Logger.success('Active Fetcher initialized and ready');
-  Logger.info('Available actions: SEARCH_MRN, FETCH_ALL, FETCH_BY_MRN, FETCH_PREOP, FETCH_INTRAOP, FETCH_POSTOP');
+  Logger.info('Available actions: FETCH_CURRENT, FETCH_BY_MRN, FETCH_ALL, FETCH_PREOP, FETCH_INTRAOP, FETCH_POSTOP, GET_CONFIG');
+  Logger.info('Tip: Use FETCH_CURRENT to grab data for the patient chart you are viewing');
 
-  // Expose for debugging
+  // Expose for debugging in console
   window.__activeFetcher = {
     searchPatientByMRN,
     fetchAllPatientData,
+    fetchCurrentPatientData,
     fetchPreOpData,
     fetchIntraOpData,
     fetchPostOpData,
-    config: ATHENA_CONFIG
+    extractChartIdFromUrl,
+    buildEndpointUrl,
+    config: ATHENA_CONFIG,
+
+    // Quick test function - fetches current patient and logs results
+    test: async (chartId) => {
+      const id = chartId || extractChartIdFromUrl();
+      if (!id) {
+        console.log('❌ No chart ID - navigate to a patient or pass ID: __activeFetcher.test("14281440")');
+        return;
+      }
+      console.log(`🚀 Testing fetch for chart ID: ${id}`);
+      const result = await fetchAllPatientData(id);
+      console.log('📊 Results:', result);
+
+      // Summary
+      const successful = Object.entries(result).filter(([k, v]) => v.success).map(([k]) => k);
+      const failed = Object.entries(result).filter(([k, v]) => !v.success).map(([k]) => k);
+      console.log(`✅ Success (${successful.length}):`, successful.join(', '));
+      console.log(`❌ Failed (${failed.length}):`, failed.join(', '));
+      return result;
+    },
+
+    // Update config at runtime without reloading
+    updateEndpoint: (name, url) => {
+      ATHENA_CONFIG.endpoints[name] = url;
+      console.log(`✅ Updated endpoint '${name}' to: ${url}`);
+    }
   };
 
 })();
