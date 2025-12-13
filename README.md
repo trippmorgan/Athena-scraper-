@@ -285,7 +285,15 @@ ignorePatterns: [
 ]
 ```
 
-### 4.3 FHIR Transformation
+### 4.3 Raw Event Store & Interpreter Index
+
+The backend now persists **all intercepted payloads** before transformation to support replay, drift detection, and audit trails.
+
+- **Raw events:** appended to `data/raw_events.jsonl` with fields for `timestamp`, `endpoint`, `method`, `status`, `patient_id`, `payload_size`, `payload`, and `source`.
+- **Interpreter index:** appended to `data/event_index.jsonl`, linking each interpreted record back to its raw event with `event_id`, `record_type`, and `endpoint`.
+- **Debug endpoints:** `/events/raw` and `/events/index` expose the most recent entries for a patient, enabling offline analysis without re-scraping.
+
+### 4.4 FHIR Transformation
 
 Raw AthenaNet payloads are transformed to FHIR R4:
 

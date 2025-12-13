@@ -24,6 +24,7 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime
 from contextlib import asynccontextmanager
 from active_routes import router as active_router, set_main_cache
+from event_store import EventStore
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -102,7 +103,7 @@ logger = setup_logging()
 class ConnectionManager:
     """Manages WebSocket connections for Chrome extension and Frontend clients."""
 
-    def __init__(self):
+    def __init__(self, event_store: EventStore):
         # Active connections
         self.chrome_connections: List[WebSocket] = []
         self.frontend_connections: List[WebSocket] = []
@@ -123,6 +124,9 @@ class ConnectionManager:
             'errors': 0,
             'patients_cached': 0
         }
+
+        # Event store for raw and interpreted records
+        self.event_store = event_store
 
         logger.info("ConnectionManager initialized")
 
@@ -213,6 +217,10 @@ class ConnectionManager:
             method = data.get('method', 'GET')
             payload = data.get('payload')
             payload_size = len(json.dumps(payload)) if payload else 0
+            status = data.get('status')
+            raw_timestamp = data.get('timestamp') or datetime.utcnow().isoformat()
+            source = data.get('source', 'chrome_interceptor')
+            raw_patient = data.get('patientId')
 
             logger.info("-" * 60)
             logger.info("INCOMING ATHENA PAYLOAD")
@@ -220,6 +228,19 @@ class ConnectionManager:
             logger.info(f"  Endpoint: {endpoint[:80]}{'...' if len(endpoint) > 80 else ''}")
             logger.info(f"  Payload size: {payload_size} bytes")
             logger.debug(f"  Raw payload preview: {str(payload)[:200]}...")
+
+            # Persist the raw payload before any transformation
+            raw_event = await self.event_store.append_raw_event({
+                'timestamp': raw_timestamp,
+                'endpoint': endpoint,
+                'method': method,
+                'status': status,
+                'patient_id': raw_patient,
+                'payload_size': payload_size,
+                'payload': payload,
+                'source': source,
+            })
+            logger.info(f"Raw event stored: {raw_event['id']}")
 
             # Convert to FHIR
             logger.info("Converting to FHIR R4...")
@@ -238,7 +259,7 @@ class ConnectionManager:
             logger.info("LOG_ENTRY sent to frontend")
 
             # Extract patient ID and update cache
-            patient_id = extract_patient_id(endpoint)
+            patient_id = raw_patient or extract_patient_id(endpoint)
             if patient_id:
                 logger.info(f"  Patient ID extracted: {patient_id}")
                 # Update current patient context
@@ -250,6 +271,15 @@ class ConnectionManager:
                 await self.update_patient_cache(self.current_patient_id, record_type, fhir_resource)
             else:
                 logger.debug("  No patient ID in endpoint and no current context")
+
+            # Index interpreted record linked to raw event for provenance
+            await self.event_store.append_index_entry({
+                'event_id': raw_event['id'],
+                'timestamp': raw_event['timestamp'],
+                'patient_id': patient_id or self.current_patient_id,
+                'record_type': record_type,
+                'endpoint': endpoint,
+            })
 
             self.stats['payloads_processed'] += 1
             logger.info(f"Payload processed successfully (Total: {self.stats['payloads_processed']})")
@@ -403,8 +433,11 @@ class ConnectionManager:
         }
 
 
+# Event store for raw and interpreted payloads
+event_store = EventStore()
+
 # Global connection manager
-manager = ConnectionManager()
+manager = ConnectionManager(event_store)
 
 # ============================================================================
 # FASTAPI APPLICATION
@@ -488,6 +521,28 @@ async def stats():
     stats = manager.get_stats()
     logger.info(f"Stats requested: {stats}")
     return stats
+
+
+@app.get("/events/raw")
+async def raw_events(patient_id: Optional[str] = None, limit: int = 50):
+    """Return recent raw intercepted events for debugging and replay."""
+
+    return {
+        "patient_id": patient_id,
+        "limit": limit,
+        "events": event_store.get_raw_events(patient_id=patient_id, limit=limit),
+    }
+
+
+@app.get("/events/index")
+async def indexed_events(patient_id: Optional[str] = None, limit: int = 50):
+    """Return interpreter index entries linked to raw events."""
+
+    return {
+        "patient_id": patient_id,
+        "limit": limit,
+        "events": event_store.get_index(patient_id=patient_id, limit=limit),
+    }
 
 
 # ============================================================================
