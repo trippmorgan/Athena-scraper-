@@ -49,13 +49,47 @@
   const originalFetch = window.fetch;
 
   // Helper to check if URL should be intercepted
+  // CRITICAL: Must include Athena-specific patterns for medication/lab/allergy data
   function shouldIntercept(url) {
     if (typeof url !== 'string') return false;
     const urlLower = url.toLowerCase();
-    return urlLower.includes('/chart/') ||
-           urlLower.includes('/api/') ||
-           urlLower.includes('/patient') ||
-           urlLower.includes('/clinical');
+
+    // Standard clinical patterns
+    if (urlLower.includes('/chart/') ||
+        urlLower.includes('/api/') ||
+        urlLower.includes('/patient') ||
+        urlLower.includes('/clinical') ||
+        urlLower.includes('/encounter') ||
+        urlLower.includes('/medication') ||
+        urlLower.includes('/allerg') ||
+        urlLower.includes('/lab') ||
+        urlLower.includes('/vital') ||
+        urlLower.includes('/problem') ||
+        urlLower.includes('/document') ||
+        urlLower.includes('/note') ||
+        urlLower.includes('/order') ||
+        urlLower.includes('/result')) {
+      return true;
+    }
+
+    // Athena-specific patterns (CRITICAL for surgical data!)
+    // Pattern: /ax/data?sources=<type>&...
+    if (urlLower.includes('/ax/data') ||
+        urlLower.includes('/ax/security_label') ||
+        urlLower.includes('/ax/medications') ||
+        urlLower.includes('/ax/encounter') ||
+        urlLower.includes('sources=active_medications') ||
+        urlLower.includes('sources=active_problems') ||
+        urlLower.includes('sources=historical_problems') ||
+        urlLower.includes('sources=chart_overview_problems') ||
+        urlLower.includes('sources=allergies') ||
+        urlLower.includes('sources=measurements') ||
+        urlLower.includes('sources=demographics') ||
+        urlLower.includes('sources=external_document')) {
+      return true;
+    }
+
+    return false;
   }
 
   // Helper to emit intercept event
@@ -163,7 +197,8 @@
   // --- 3. Ready message ---
   InjectedLogger.info('═'.repeat(50));
   InjectedLogger.success('INTERCEPTOR ACTIVE AND READY');
-  InjectedLogger.info('Monitoring: /chart/*, /api/*, /patient*, /clinical*');
+  InjectedLogger.info('Monitoring standard: /chart/*, /api/*, /patient*, /clinical*, /medication*, /lab*, /vital*');
+  InjectedLogger.info('Monitoring Athena:  /ax/data, sources=active_medications, sources=allergies, etc.');
   InjectedLogger.info('═'.repeat(50));
 
   // --- 4. Periodic stats logging ---

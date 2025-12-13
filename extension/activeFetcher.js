@@ -26,6 +26,33 @@
   };
 
   // ============================================================
+  // COMMAND DEBOUNCING - Prevent duplicate command floods
+  // ============================================================
+  const commandDebounce = {
+    lastCommands: new Map(),  // action -> timestamp
+    debounceMs: 3000,         // 3 second debounce window
+
+    shouldProcess(action, chartId) {
+      const key = `${action}_${chartId || 'none'}`;
+      const now = Date.now();
+      const lastTime = this.lastCommands.get(key);
+
+      if (lastTime && (now - lastTime) < this.debounceMs) {
+        Logger.warn(`DEBOUNCED: ${action} (${Math.round((now - lastTime)/1000)}s since last)`);
+        return false;
+      }
+
+      this.lastCommands.set(key, now);
+      return true;
+    },
+
+    clear(action, chartId) {
+      const key = `${action}_${chartId || 'none'}`;
+      this.lastCommands.delete(key);
+    }
+  };
+
+  // ============================================================
   // ATHENA ENDPOINT CONFIGURATION
   // Discovered from actual AthenaNet traffic analysis
   // Pattern: /{practiceId}/{departmentId}/ax/{endpoint}
@@ -461,6 +488,21 @@
     if (!event.data || event.data.type !== 'ACTIVE_FETCH_COMMAND') return;
 
     const { action, payload, callbackId } = event.data;
+
+    // Extract chart ID for debounce key
+    const chartId = payload?.patientId || payload?.chartId || payload?.mrn || extractChartIdFromUrl();
+
+    // DEBOUNCE CHECK - Prevent rapid-fire duplicate commands
+    if (!commandDebounce.shouldProcess(action, chartId)) {
+      // Send cached response for debounced requests
+      emitResult(action, {
+        success: false,
+        debounced: true,
+        message: 'Request debounced - please wait before retrying'
+      }, callbackId);
+      return;
+    }
+
     Logger.info('Command received:', { action, payload, callbackId });
 
     try {
@@ -516,15 +558,36 @@
           break;
 
         case 'FETCH_PREOP':
-          result = await fetchPreOpData(payload.patientId || payload.chartId);
+          // Auto-extract chart ID from URL if not provided
+          const preopChartId = payload.patientId || payload.chartId || payload.mrn || extractChartIdFromUrl();
+          if (!preopChartId) {
+            result = { success: false, error: 'No chart ID - navigate to patient chart first' };
+          } else {
+            Logger.info('FETCH_PREOP using chart ID:', preopChartId);
+            result = await fetchPreOpData(preopChartId);
+          }
           break;
 
         case 'FETCH_INTRAOP':
-          result = await fetchIntraOpData(payload.patientId || payload.chartId);
+          // Auto-extract chart ID from URL if not provided
+          const intraopChartId = payload.patientId || payload.chartId || payload.mrn || extractChartIdFromUrl();
+          if (!intraopChartId) {
+            result = { success: false, error: 'No chart ID - navigate to patient chart first' };
+          } else {
+            Logger.info('FETCH_INTRAOP using chart ID:', intraopChartId);
+            result = await fetchIntraOpData(intraopChartId);
+          }
           break;
 
         case 'FETCH_POSTOP':
-          result = await fetchPostOpData(payload.patientId || payload.chartId);
+          // Auto-extract chart ID from URL if not provided
+          const postopChartId = payload.patientId || payload.chartId || payload.mrn || extractChartIdFromUrl();
+          if (!postopChartId) {
+            result = { success: false, error: 'No chart ID - navigate to patient chart first' };
+          } else {
+            Logger.info('FETCH_POSTOP using chart ID:', postopChartId);
+            result = await fetchPostOpData(postopChartId);
+          }
           break;
 
         case 'CONFIGURE_ENDPOINTS':

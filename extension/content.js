@@ -32,6 +32,22 @@ const ContentLogger = {
 let interceptCount = 0;
 let lastInterceptTime = null;
 
+// Helper to extract patient ID from URL
+function extractPatientId(url) {
+  if (!url) return null;
+  const patterns = [
+    /\/chart\/(\d+)/i,
+    /chart[_-]?id[=:](\d+)/i,
+    /patient[_-]?id[=:](\d+)/i,
+    /\/(\d{6,10})(?:\/|$|\?)/
+  ];
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
+}
+
 ContentLogger.info('Content script initializing...');
 ContentLogger.info('Page URL: ' + window.location.href);
 
@@ -69,16 +85,25 @@ window.addEventListener('SHADOW_EHR_INTERCEPT', function(e) {
     ContentLogger.debug('Payload structure:', { keys, keyCount: Object.keys(data.payload).length });
   }
 
-  // 3. Send to Background Worker (which holds the WebSocket)
+  // 3. Send to Background Worker (which holds the HTTP connection)
+  // IMPORTANT: background.js expects type: 'API_CAPTURE' with payload
   try {
     chrome.runtime.sendMessage({
-      action: "RELAY_PAYLOAD",
-      data: data
+      type: "API_CAPTURE",
+      payload: {
+        source: data.type || 'intercept',
+        method: data.method || 'GET',
+        url: data.url,
+        data: data.payload,
+        patientId: extractPatientId(data.url),
+        timestamp: data.timestamp || new Date().toISOString(),
+        size: data.payload ? JSON.stringify(data.payload).length : 0
+      }
     }, (response) => {
       if (chrome.runtime.lastError) {
         ContentLogger.error('Failed to send to background:', chrome.runtime.lastError.message);
       } else {
-        ContentLogger.debug('Message sent to background worker');
+        ContentLogger.debug('Message sent to background worker', response);
       }
     });
   } catch (err) {

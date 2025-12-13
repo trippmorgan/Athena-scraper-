@@ -89,8 +89,38 @@ def extract_patient_id(endpoint: str) -> Optional[str]:
 def detect_record_type(endpoint: str, payload: Any) -> str:
     """Detect the type of clinical record from endpoint and payload."""
     endpoint_lower = endpoint.lower()
-    logger.debug(f"[FHIR] Detecting record type for: {endpoint_lower[:50]}...")
+    logger.debug(f"[FHIR] Detecting record type for: {endpoint_lower[:80]}...")
 
+    # =========================================================================
+    # ATHENA-SPECIFIC URL PATTERNS (query parameter based)
+    # Pattern: /ax/data?sources=<type>&...
+    # =========================================================================
+    if 'sources=' in endpoint_lower:
+        if 'active_medications' in endpoint_lower or 'medications' in endpoint_lower:
+            logger.info(f"[FHIR] Record type: MEDICATION (Athena sources param)")
+            return 'medication'
+        elif 'active_problems' in endpoint_lower or 'chart_overview_problems' in endpoint_lower or 'historical_problems' in endpoint_lower:
+            logger.info(f"[FHIR] Record type: PROBLEM (Athena sources param)")
+            return 'problem'
+        elif 'allergies' in endpoint_lower:
+            logger.info(f"[FHIR] Record type: ALLERGY (Athena sources param)")
+            return 'allergy'
+        elif 'measurements' in endpoint_lower or 'vitals' in endpoint_lower:
+            logger.info(f"[FHIR] Record type: VITAL (Athena sources param)")
+            return 'vital'
+        elif 'demographics' in endpoint_lower:
+            logger.info(f"[FHIR] Record type: PATIENT (Athena sources param)")
+            return 'patient'
+        elif 'lab' in endpoint_lower or 'results' in endpoint_lower:
+            logger.info(f"[FHIR] Record type: LAB (Athena sources param)")
+            return 'lab'
+        elif 'document' in endpoint_lower or 'external_document' in endpoint_lower:
+            logger.info(f"[FHIR] Record type: NOTE (Athena sources param)")
+            return 'note'
+
+    # =========================================================================
+    # STANDARD URL PATH PATTERNS
+    # =========================================================================
     if '/vitals' in endpoint_lower or '/vital' in endpoint_lower:
         logger.info(f"[FHIR] Record type: VITAL")
         return 'vital'
@@ -223,24 +253,124 @@ def convert_medications(payload: Any) -> List[FHIRMedication]:
     if isinstance(payload, list):
         med_list = payload
     elif isinstance(payload, dict):
+        # DEBUG: Log all top-level keys to understand Athena's structure
+        top_keys = list(payload.keys())[:15]
+        logger.info(f"[FHIR] MEDICATION payload top-level keys: {top_keys}")
+
+        # Standard keys
         med_list = payload.get('medications') or payload.get('prescriptions') or payload.get('meds') or []
+
+        # Athena-specific: sources=active_medications returns nested data
+        if not med_list and 'active_medications' in payload:
+            athena_meds = payload.get('active_medications', {})
+            logger.info(f"[FHIR] Found 'active_medications' key, type: {type(athena_meds).__name__}")
+            if isinstance(athena_meds, dict):
+                inner_keys = list(athena_meds.keys())[:10]
+                logger.info(f"[FHIR] active_medications dict keys: {inner_keys}")
+                med_list = athena_meds.get('medications', []) or athena_meds.get('data', []) or athena_meds.get('Medications', []) or []
+                # Try nested structure: active_medications.Medications (Athena uses PascalCase)
+                if not med_list:
+                    for key in athena_meds.keys():
+                        if 'medication' in key.lower():
+                            logger.info(f"[FHIR] Found medication-like key: {key}")
+                            val = athena_meds.get(key)
+                            if isinstance(val, list):
+                                med_list = val
+                                break
+            elif isinstance(athena_meds, list):
+                med_list = athena_meds
+            logger.info(f"[FHIR] Extracted {len(med_list)} medications from Athena active_medications")
+
+        # Athena alternative: data key with medications inside
+        if not med_list and 'data' in payload:
+            data = payload.get('data', {})
+            if isinstance(data, dict):
+                med_list = data.get('medications', []) or data.get('active_medications', []) or []
+            elif isinstance(data, list):
+                # Check if items look like medications
+                for item in data:
+                    if isinstance(item, dict) and any(k in item for k in ['medicationName', 'drugName', 'medication', 'rxnorm']):
+                        med_list = data
+                        break
+
         if not med_list and 'medication' in payload:
             med_list = [payload]
 
+    # DEBUG: Log first medication object structure
+    if med_list and isinstance(med_list[0], dict):
+        first_med_keys = list(med_list[0].keys())[:15]
+        logger.info(f"[FHIR] First medication object keys: {first_med_keys}")
+
     for med in med_list:
         if isinstance(med, dict):
-            name = med.get('medicationName') or med.get('name') or med.get('drugName') or med.get('description') or ''
-            dose = med.get('dosage') or med.get('dose') or med.get('strength') or ''
-            freq = med.get('frequency') or med.get('sig') or med.get('directions') or ''
-            status = med.get('status', 'active')
+            name = ''
+            dose = ''
+            freq = ''
+            status = 'active'
 
-            medications.append(FHIRMedication(
-                id=generate_id(med),
-                name=str(name),
-                dose=str(dose) if dose else None,
-                frequency=str(freq) if freq else None,
-                status=str(status)
-            ))
+            # ATHENA SPECIFIC: Medication info is in Events array
+            # Structure: {'__CLASS__': 'Athena::Chart::Entity::Medication', 'Events': [...]}
+            if 'Events' in med and isinstance(med.get('Events'), list):
+                events = med.get('Events', [])
+                if events:
+                    # Log first event structure for debugging
+                    first_event = events[0] if events else {}
+                    if isinstance(first_event, dict):
+                        event_keys = list(first_event.keys())[:15]
+                        logger.debug(f"[FHIR] Athena Event keys: {event_keys}")
+
+                    # Extract from first event (most recent)
+                    for event in events:
+                        if isinstance(event, dict):
+                            # Try various Athena medication name fields
+                            name = (event.get('MedicationName') or event.get('NDCDescription') or
+                                    event.get('BrandName') or event.get('GenericName') or
+                                    event.get('DrugName') or event.get('Name') or
+                                    event.get('Description') or '')
+                            dose = (event.get('StrengthDescription') or event.get('Strength') or
+                                    event.get('Dosage') or event.get('Dose') or '')
+                            freq = (event.get('SigDescription') or event.get('Sig') or
+                                    event.get('Frequency') or event.get('Directions') or '')
+                            status = event.get('Status') or event.get('MedicationStatus') or 'active'
+
+                            if name:
+                                break  # Found a name, stop searching
+
+            # Standard keys (camelCase) - fallback
+            if not name:
+                name = med.get('medicationName') or med.get('name') or med.get('drugName') or med.get('description') or ''
+            # Athena PascalCase keys - fallback
+            if not name:
+                name = med.get('MedicationName') or med.get('Name') or med.get('DrugName') or med.get('Description') or ''
+            # Athena nested structure: might have 'Medication' -> 'Name'
+            if not name and 'Medication' in med:
+                inner = med.get('Medication', {})
+                name = inner.get('Name') or inner.get('DrugName') or inner.get('Description') or ''
+            # Try NDCDescription or BrandName (common in Athena)
+            if not name:
+                name = med.get('NDCDescription') or med.get('BrandName') or med.get('GenericName') or ''
+
+            if not dose:
+                dose = med.get('dosage') or med.get('dose') or med.get('strength') or ''
+            if not dose:
+                dose = med.get('Dosage') or med.get('Dose') or med.get('Strength') or med.get('StrengthDescription') or ''
+
+            if not freq:
+                freq = med.get('frequency') or med.get('sig') or med.get('directions') or ''
+            if not freq:
+                freq = med.get('Frequency') or med.get('Sig') or med.get('Directions') or med.get('SigDescription') or ''
+
+            if name:
+                medications.append(FHIRMedication(
+                    id=generate_id(med),
+                    name=str(name),
+                    dose=str(dose) if dose else None,
+                    frequency=str(freq) if freq else None,
+                    status=str(status)
+                ))
+                logger.debug(f"[FHIR] Extracted medication: {name[:50]}")
+            else:
+                logger.warning(f"[FHIR] Could not extract medication name. Keys: {list(med.keys())[:10]}")
         elif isinstance(med, str):
             medications.append(FHIRMedication(
                 id=generate_id(med),
@@ -325,9 +455,42 @@ def convert_to_fhir(endpoint: str, method: str, payload: Any) -> Tuple[str, Any]
     """
     Main conversion function. Detects record type and converts to appropriate FHIR resource.
 
+    IMPORTANT: Handles compound payloads that contain multiple data types
+    (e.g., {'medications': [...], 'vitals': {...}, 'labs': [...]})
+
     Returns:
         Tuple of (record_type, fhir_resource)
     """
+    # Check for compound payload FIRST (contains multiple data types)
+    if isinstance(payload, dict):
+        compound_keys = {'medications', 'vitals', 'labs', 'orders', 'problems', 'allergies'}
+        present_keys = set(payload.keys()) & compound_keys
+
+        if len(present_keys) >= 2:
+            logger.info(f"[FHIR] COMPOUND PAYLOAD detected with keys: {present_keys}")
+            # Return as compound type with all data
+            result = {'_compound': True}
+
+            if 'medications' in payload and payload['medications']:
+                meds = payload['medications']
+                if isinstance(meds, list):
+                    result['medications'] = [m.dict() for m in convert_medications(meds)]
+                    logger.info(f"[FHIR] Extracted {len(result['medications'])} medications from compound payload")
+
+            if 'vitals' in payload and payload['vitals']:
+                result['vitals'] = convert_vitals(payload['vitals'])
+
+            if 'labs' in payload and payload['labs']:
+                result['labs'] = payload['labs']
+
+            if 'problems' in payload and payload['problems']:
+                result['conditions'] = [c.dict() for c in convert_problems(payload['problems'])]
+
+            if 'allergies' in payload and payload['allergies']:
+                result['allergies'] = payload['allergies']
+
+            return 'compound', result
+
     record_type = detect_record_type(endpoint, payload)
 
     if record_type == 'vital':

@@ -18,7 +18,18 @@
       '/orders/',
       '/results/',
       '/notes/',
-      '/api/'
+      '/api/',
+      // Athena-specific patterns
+      '/ax/data',           // Main Athena data endpoint with sources= params
+      '/ax/security_label', // Security labels
+      '/ax/medications',    // Medication endpoints
+      '/ax/encounter',      // Encounter data
+      'sources=active_medications',
+      'sources=active_problems',
+      'sources=allergies',
+      'sources=measurements',
+      'sources=demographics',
+      'sources=historical_problems'
     ],
     // Skip these (UI noise, static assets, telemetry)
     ignorePatterns: [
@@ -109,18 +120,21 @@
   function extractPatientContext(url) {
     // Try to extract patient ID from URL patterns
     const patterns = [
-      /patient[\/=](\d+)/i,
-      /patientid[\/=](\d+)/i,
-      /chart[\/=](\d+)/i,
-      /encounter[\/=](\d+)/i
+      /chartid[=:](\d+)/i,           // Athena: chartid=32111724 (MOST COMMON)
+      /patient[_-]?id[=:](\d+)/i,    // patientid=, patient_id=, patient-id=
+      /patient[\/=](\d+)/i,          // /patient/123 or patient=123
+      /chart[\/=](\d+)/i,            // /chart/123 or chart=123
+      /encounter[\/=](\d+)/i,        // /encounter/123
+      /\/(\d{6,})(?:\/|$|\?|&)/      // Fallback: 6+ digit number in path
     ];
     for (const pattern of patterns) {
       const match = url.match(pattern);
       if (match) {
-        Logger.debug(`Patient ID extracted: ${match[1]}`);
+        Logger.debug(`Patient ID extracted: ${match[1]} from URL: ${url.substring(0, 50)}`);
         return match[1];
       }
     }
+    Logger.debug(`No patient ID found in URL: ${url.substring(0, 60)}`);
     return null;
   }
 

@@ -128,6 +128,9 @@ class ConnectionManager:
         # Event store for raw and interpreted records
         self.event_store = event_store
 
+        # Endpoint tracking for discovery analysis
+        self.endpoint_history: Dict[str, Dict] = {}  # URL pattern -> {count, methods, sizes, record_type}
+
         logger.info("ConnectionManager initialized")
 
     async def connect_chrome(self, websocket: WebSocket):
@@ -245,7 +248,10 @@ class ConnectionManager:
             # Convert to FHIR
             logger.info("Converting to FHIR R4...")
             record_type, fhir_resource = convert_to_fhir(endpoint, method, payload)
-            logger.info(f"  Record type detected: {record_type}")
+            logger.info(f"  🏷️  RECORD TYPE DETECTED: {record_type.upper()}")
+            if record_type == 'unknown':
+                logger.warning(f"  ⚠️  UNKNOWN record type - data may not be categorized correctly!")
+                logger.warning(f"  ⚠️  URL: {endpoint[:100]}")
 
             # Create log entry for frontend
             log_entry = create_log_entry(endpoint, method, payload, fhir_resource)
@@ -280,6 +286,17 @@ class ConnectionManager:
                 'record_type': record_type,
                 'endpoint': endpoint,
             })
+
+            # Track endpoint for discovery analysis
+            import re
+            normalized_endpoint = re.sub(r'/\d+(?=/|$|\?)', '/{id}', endpoint)
+            if normalized_endpoint not in self.endpoint_history:
+                self.endpoint_history[normalized_endpoint] = {
+                    'count': 0, 'methods': set(), 'sizes': [], 'record_type': record_type
+                }
+            self.endpoint_history[normalized_endpoint]['count'] += 1
+            self.endpoint_history[normalized_endpoint]['methods'].add(method)
+            self.endpoint_history[normalized_endpoint]['sizes'].append(payload_size)
 
             self.stats['payloads_processed'] += 1
             logger.info(f"Payload processed successfully (Total: {self.stats['payloads_processed']})")
@@ -338,9 +355,26 @@ class ConnectionManager:
             logger.info(f"  Vitals updated")
 
         elif record_type == 'medication':
-            if isinstance(fhir_resource, dict) and 'medications' in fhir_resource:
-                cache['medications'] = fhir_resource['medications']
-                logger.info(f"  Medications updated ({len(cache['medications'])} meds)")
+            logger.info(f"  💊 MEDICATION DATA RECEIVED - Type: {type(fhir_resource).__name__}")
+            if isinstance(fhir_resource, dict):
+                logger.info(f"  💊 MEDICATION KEYS: {list(fhir_resource.keys())[:10]}")
+                if 'medications' in fhir_resource:
+                    meds = fhir_resource['medications']
+                    if meds:
+                        cache['medications'].extend(meds) if isinstance(meds, list) else cache['medications'].append(meds)
+                        logger.info(f"  ✅ Medications updated ({len(cache['medications'])} total meds)")
+                    else:
+                        logger.warning(f"  ⚠️ Empty medications list in response")
+                else:
+                    # Try to extract from other keys
+                    logger.warning(f"  ⚠️ No 'medications' key - raw keys: {list(fhir_resource.keys())}")
+                    # Store raw for debugging
+                    cache['medications'].append(fhir_resource)
+            elif isinstance(fhir_resource, list):
+                cache['medications'].extend(fhir_resource)
+                logger.info(f"  ✅ Medications list stored ({len(fhir_resource)} items)")
+            else:
+                logger.warning(f"  ⚠️ Unexpected medication format: {type(fhir_resource)}")
 
         elif record_type == 'problem':
             if isinstance(fhir_resource, dict) and 'conditions' in fhir_resource:
@@ -382,6 +416,59 @@ class ConnectionManager:
             else:
                 cache['imaging'].append(fhir_resource)
             logger.info(f"  Imaging updated ({len(cache['imaging'])} studies)")
+
+        elif record_type == 'compound':
+            # COMPOUND PAYLOAD: Contains multiple data types (medications, vitals, labs, etc.)
+            logger.info(f"  🔀 COMPOUND PAYLOAD PROCESSING")
+            if isinstance(fhir_resource, dict):
+                # Extract medications
+                if 'medications' in fhir_resource and fhir_resource['medications']:
+                    meds = fhir_resource['medications']
+                    if isinstance(meds, list):
+                        cache['medications'].extend(meds)
+                    else:
+                        cache['medications'].append(meds)
+                    logger.info(f"  💊 Extracted {len(meds) if isinstance(meds, list) else 1} medications from compound")
+
+                # Extract vitals
+                if 'vitals' in fhir_resource and fhir_resource['vitals']:
+                    vitals = fhir_resource['vitals']
+                    if hasattr(vitals, 'dict'):
+                        cache['vitals'] = vitals.dict()
+                    else:
+                        cache['vitals'] = vitals
+                    logger.info(f"  📊 Extracted vitals from compound")
+
+                # Extract labs
+                if 'labs' in fhir_resource and fhir_resource['labs']:
+                    labs = fhir_resource['labs']
+                    if isinstance(labs, list):
+                        cache['labs'].extend(labs)
+                    else:
+                        cache['labs'].append(labs)
+                    logger.info(f"  🧪 Extracted {len(labs) if isinstance(labs, list) else 1} labs from compound")
+
+                # Extract conditions/problems
+                if 'conditions' in fhir_resource and fhir_resource['conditions']:
+                    conditions = fhir_resource['conditions']
+                    if isinstance(conditions, list):
+                        cache['problems'].extend(conditions)
+                    else:
+                        cache['problems'].append(conditions)
+                    logger.info(f"  🩺 Extracted {len(conditions) if isinstance(conditions, list) else 1} conditions from compound")
+
+                # Extract allergies
+                if 'allergies' in fhir_resource and fhir_resource['allergies']:
+                    allergies = fhir_resource['allergies']
+                    if isinstance(allergies, list):
+                        cache['allergies'].extend(allergies)
+                        cache['allergy'].extend(allergies)
+                    else:
+                        cache['allergies'].append(allergies)
+                        cache['allergy'].append(allergies)
+                    logger.info(f"  ⚠️ Extracted {len(allergies) if isinstance(allergies, list) else 1} allergies from compound")
+
+                logger.info(f"  ✅ COMPOUND PAYLOAD PROCESSED SUCCESSFULLY")
 
         else:
             # Store unknown types for debugging
@@ -526,7 +613,6 @@ async def stats():
 @app.get("/events/raw")
 async def raw_events(patient_id: Optional[str] = None, limit: int = 50):
     """Return recent raw intercepted events for debugging and replay."""
-
     return {
         "patient_id": patient_id,
         "limit": limit,
@@ -537,11 +623,59 @@ async def raw_events(patient_id: Optional[str] = None, limit: int = 50):
 @app.get("/events/index")
 async def indexed_events(patient_id: Optional[str] = None, limit: int = 50):
     """Return interpreter index entries linked to raw events."""
-
     return {
         "patient_id": patient_id,
         "limit": limit,
         "events": event_store.get_index(patient_id=patient_id, limit=limit),
+    }
+
+
+@app.get("/debug/cache/{patient_id}")
+async def debug_patient_cache(patient_id: str):
+    """
+    Debug endpoint: Get raw cache data for a patient.
+    Helps identify data structure issues.
+    """
+    if patient_id not in manager.patient_cache:
+        return {"error": "Patient not found", "available": list(manager.patient_cache.keys())}
+
+    cache = manager.patient_cache[patient_id]
+    return {
+        "patient_id": patient_id,
+        "cache_keys": list(cache.keys()),
+        "medications_count": len(cache.get('medications', [])),
+        "medications_sample": cache.get('medications', [])[:3],  # First 3 for debug
+        "problems_count": len(cache.get('problems', [])),
+        "labs_count": len(cache.get('labs', [])),
+        "allergies_count": len(cache.get('allergies', [])),
+        "raw_cache": cache
+    }
+
+
+@app.get("/captured-endpoints")
+async def get_captured_endpoints():
+    """
+    Get all captured endpoint patterns for discovery analysis.
+    Returns data in format compatible with /discovery/analyze-traffic.
+    """
+    endpoints = []
+    for pattern, data in manager.endpoint_history.items():
+        avg_size = sum(data['sizes']) / len(data['sizes']) if data['sizes'] else 0
+        endpoints.append({
+            "path": pattern,
+            "count": data['count'],
+            "methods": list(data['methods']),
+            "avgSize": int(avg_size),
+            "detected_type": data['record_type']
+        })
+
+    # Sort by count descending
+    endpoints.sort(key=lambda x: x['count'], reverse=True)
+
+    return {
+        "endpoints": endpoints,
+        "total_unique": len(endpoints),
+        "total_requests": sum(e['count'] for e in endpoints)
     }
 
 
@@ -562,7 +696,7 @@ async def ingest_payload(request: Request, x_source: Optional[str] = Header(None
         body = await request.json()
 
         logger.info("=" * 60)
-        logger.info("HTTP INGEST RECEIVED")
+        logger.info("🔥 HTTP INGEST RECEIVED")
         logger.info(f"  Source Header: {x_source or 'none'}")
 
         # Extract fields from the new payload format
@@ -575,14 +709,24 @@ async def ingest_payload(request: Request, x_source: Optional[str] = Header(None
         size = body.get('size', 0)
 
         logger.info(f"  Method: {method}")
-        logger.info(f"  URL: {url[:80]}{'...' if len(url) > 80 else ''}")
+        logger.info(f"  URL: {url[:100]}{'...' if len(url) > 100 else ''}")
         logger.info(f"  Source: {source}")
         logger.info(f"  Patient ID from extension: {patient_id or 'none'}")
         logger.info(f"  Size: {size} bytes")
         logger.info(f"  Data type: {type(data).__name__}")
         if isinstance(data, dict):
-            logger.info(f"  Data keys: {list(data.keys())[:10]}")
+            keys = list(data.keys())[:15]
+            logger.info(f"  Data keys: {keys}")
+            # Log nested keys for Athena compound payloads
+            for key in ['active_medications', 'allergies', 'active_problems', 'measurements', 'demographics']:
+                if key in data:
+                    nested = data[key]
+                    if isinstance(nested, dict):
+                        logger.info(f"  📦 {key} keys: {list(nested.keys())[:5]}")
+                    elif isinstance(nested, list):
+                        logger.info(f"  📦 {key}: list with {len(nested)} items")
         logger.info(f"  Frontend connections: {len(manager.frontend_connections)}")
+        logger.info(f"  Current patients cached: {len(manager.patient_cache)}")
 
         # Convert to internal format for processing
         internal_payload = {
