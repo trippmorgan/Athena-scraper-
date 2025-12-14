@@ -260,29 +260,53 @@
   }
 
   // ============================================================
-  // BATCH FETCH - Core Active Extraction
+  // BATCH FETCH - Core Active Extraction (with throttling)
   // ============================================================
+
+  // Throttle delay between requests to avoid HTTP 500 rate limiting
+  const THROTTLE_DELAY_MS = 300;
+
+  async function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
 
   async function fetchAllPatientData(chartId, options = {}) {
     Logger.info('═'.repeat(50));
-    Logger.info('BATCH FETCH INITIATED', { chartId, options });
+    Logger.info('BATCH FETCH INITIATED (throttled)', { chartId, options });
 
     if (!chartId) {
       Logger.error('No chart ID provided - cannot fetch data');
-      return { error: 'No chart ID provided' };
+      return { error: 'No chart ID provided', patientId: null };
     }
 
     const endpoints = ATHENA_CONFIG.endpoints;
-    const fetchPromises = [];
-    const results = {};
+    const results = {
+      patientId: chartId,  // Include patient ID in results
+      _meta: { chartId, timestamp: new Date().toISOString() }
+    };
 
     // Determine which endpoints to fetch (only chart-level, skip encounter-level unless we have encounterId)
-    const chartEndpoints = ['securityLabels', 'activeProblems', 'activeMedications', 'allergies', 'vitals', 'demographics'];
+    const chartEndpoints = ['demographics', 'activeMedications', 'activeProblems', 'allergies', 'vitals'];
     const endpointsToFetch = options.endpoints || chartEndpoints;
 
+    // KEY NAME MAPPING: Map Athena endpoint names to standardized keys expected by backend
+    const keyMapping = {
+      'activeMedications': 'medications',
+      'activeProblems': 'problems',
+      'allergies': 'allergies',
+      'vitals': 'vitals',
+      'demographics': 'demographics',
+      'historicalProblems': 'historicalProblems',
+      'documents': 'documents',
+      'labs': 'labs'
+    };
+
+    let successCount = 0;
+    let failCount = 0;
+
+    // SEQUENTIAL FETCH with throttling to avoid HTTP 500 rate limiting
     for (const key of endpointsToFetch) {
       if (endpoints[key]) {
-        // Use the new buildEndpointUrl function with proper placeholders
         const url = buildEndpointUrl(endpoints[key], chartId, options.encounterId);
 
         // Skip external APIs for now (they require different auth)
@@ -291,25 +315,103 @@
           continue;
         }
 
-        fetchPromises.push(
-          authenticatedFetch(url).then(result => {
-            results[key] = result;
-          })
-        );
+        // Throttle between requests
+        if (successCount > 0 || failCount > 0) {
+          await sleep(THROTTLE_DELAY_MS);
+        }
+
+        const result = await authenticatedFetch(url);
+
+        // Use standardized key name for backend compatibility
+        const standardKey = keyMapping[key] || key;
+        results[standardKey] = result;
+
+        if (result.success) {
+          successCount++;
+          // Extract actual data from Athena response structure
+          if (result.data) {
+            results[standardKey] = {
+              success: true,
+              data: normalizeAthenaResponse(key, result.data),
+              endpoint: url
+            };
+          }
+        } else {
+          failCount++;
+        }
       }
     }
 
-    // Execute all fetches in parallel
-    await Promise.allSettled(fetchPromises);
-
     Logger.info('═'.repeat(50));
     Logger.success('BATCH FETCH COMPLETE', {
-      total: fetchPromises.length,
-      successful: Object.values(results).filter(r => r.success).length,
-      failed: Object.values(results).filter(r => !r.success).length
+      total: successCount + failCount,
+      successful: successCount,
+      failed: failCount
     });
 
     return results;
+  }
+
+  // Normalize Athena response structure to standard format expected by backend
+  function normalizeAthenaResponse(endpointKey, data) {
+    if (!data) return data;
+
+    // Athena wraps data in various nested structures - unwrap them
+    switch (endpointKey) {
+      case 'activeMedications':
+        // Athena: { active_medications: { Medications: [...] } }
+        if (data.active_medications) {
+          const meds = data.active_medications;
+          if (meds.Medications) return meds.Medications;
+          if (meds.medications) return meds.medications;
+          if (Array.isArray(meds)) return meds;
+          return meds;
+        }
+        return data;
+
+      case 'activeProblems':
+        // Athena: { active_problems: { Problems: [...] }, chart_overview_problems: {...} }
+        if (data.active_problems) {
+          const probs = data.active_problems;
+          if (probs.Problems) return probs.Problems;
+          if (probs.problems) return probs.problems;
+          if (Array.isArray(probs)) return probs;
+          return probs;
+        }
+        if (data.chart_overview_problems) {
+          return data.chart_overview_problems;
+        }
+        return data;
+
+      case 'allergies':
+        // Athena: { allergies: { Allergies: [...] } }
+        if (data.allergies) {
+          const allergies = data.allergies;
+          if (allergies.Allergies) return allergies.Allergies;
+          if (Array.isArray(allergies)) return allergies;
+          return allergies;
+        }
+        return data;
+
+      case 'vitals':
+      case 'measurements':
+        // Athena: { measurements: { Vitals: [...] } }
+        if (data.measurements) {
+          const vitals = data.measurements;
+          if (vitals.Vitals) return vitals.Vitals;
+          if (Array.isArray(vitals)) return vitals;
+          return vitals;
+        }
+        return data;
+
+      case 'demographics':
+        // Athena: { demographics: {...} }
+        if (data.demographics) return data.demographics;
+        return data;
+
+      default:
+        return data;
+    }
   }
 
   // Fetch data for currently viewed patient (uses URL extraction)

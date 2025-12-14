@@ -34,6 +34,20 @@ from ai_summarizer import (
     get_summarizer, generate_context, generate_briefing,
     generate_med_alert, ClinicalSummarizer, SummaryType
 )
+from provenance import Provenance, sha256_json
+from files import (
+    SessionContext, get_session_context, set_session_context,
+    DownloadManager, get_download_manager, DiskArtifactStore, get_artifact_store
+)
+from artifacts import (
+    extract_document_refs, get_artifact_detector, get_artifact_index,
+    DocumentRef, MissingDocument
+)
+from vascular_extractors import (
+    get_vascular_extractor, extract_vascular_assessment,
+    VascularAssessment, PADExtractor, CarotidExtractor, AAAExtractor,
+    AntithromboticBridgingCalculator, ANTITHROMBOTIC_DATABASE
+)
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -1342,6 +1356,428 @@ async def clear_cache():
     manager.patient_cache.clear()
     logger.warning(f"Patient cache cleared ({count} patients removed)")
     return {"status": "cleared", "patients_removed": count}
+
+
+# ==============================================================================
+# LAYER 5: ARTIFACT & DOCUMENT DOWNLOAD ENDPOINTS
+# ==============================================================================
+
+@app.post("/session/context")
+async def update_session_context(ctx_data: dict):
+    """
+    Update session context from Chrome extension.
+
+    The extension should send cookies and headers captured from the active
+    Athena session to enable HTTP-first document downloads.
+    """
+    try:
+        ctx = SessionContext.from_extension_message(ctx_data)
+        set_session_context(ctx)
+        logger.info(f"[SESSION] Context updated: {ctx}")
+        return {
+            "status": "ok",
+            "base_url": ctx.base_url,
+            "cookies_count": len(ctx.cookies),
+            "headers_count": len(ctx.headers),
+            "patient_hint": ctx.patient_hint,
+        }
+    except Exception as e:
+        logger.error(f"[SESSION] Failed to update context: {e}")
+        return {"status": "error", "error": str(e)}
+
+
+@app.get("/session/context")
+async def get_current_session():
+    """Get the current session context status."""
+    ctx = get_session_context()
+    if ctx:
+        return {
+            "status": "active",
+            "base_url": ctx.base_url,
+            "cookies_count": len(ctx.cookies),
+            "headers_count": len(ctx.headers),
+            "patient_hint": ctx.patient_hint,
+            "encounter_hint": ctx.encounter_hint,
+        }
+    return {"status": "no_session", "message": "No session context available"}
+
+
+@app.get("/artifacts")
+async def list_artifacts(patient_id: Optional[str] = None, limit: int = 50):
+    """
+    List stored artifacts.
+
+    Args:
+        patient_id: Optional filter by patient
+        limit: Maximum number of artifacts to return
+    """
+    store = get_artifact_store()
+
+    if patient_id:
+        artifacts = store.list_by_patient(patient_id)
+    else:
+        artifacts = store.list_all(limit=limit)
+
+    return {
+        "artifacts": [a.to_dict() for a in artifacts],
+        "count": len(artifacts),
+    }
+
+
+@app.get("/artifacts/stats")
+async def artifact_stats():
+    """Get artifact storage statistics."""
+    store = get_artifact_store()
+    return store.stats()
+
+
+@app.get("/artifacts/{artifact_id}")
+async def get_artifact_metadata(artifact_id: str):
+    """Get metadata for a specific artifact."""
+    store = get_artifact_store()
+    meta = store.get_metadata(artifact_id)
+    if meta:
+        return meta.to_dict()
+    return {"error": "Artifact not found", "artifact_id": artifact_id}
+
+
+@app.get("/artifacts/{artifact_id}/download")
+async def download_artifact(artifact_id: str):
+    """Download artifact bytes (returns base64 for JSON compatibility)."""
+    import base64
+    store = get_artifact_store()
+    data = store.get(artifact_id)
+    if data:
+        meta = store.get_metadata(artifact_id)
+        return {
+            "artifact_id": artifact_id,
+            "filename": meta.original_filename if meta else None,
+            "mime_type": meta.mime_type if meta else None,
+            "size_bytes": len(data),
+            "content_b64": base64.b64encode(data).decode("ascii"),
+        }
+    return {"error": "Artifact not found", "artifact_id": artifact_id}
+
+
+@app.post("/artifacts/detect-missing")
+async def detect_missing_artifacts(payload: dict):
+    """
+    Detect missing documents from an Athena payload.
+
+    Pass in a raw Athena payload and get back a list of documents
+    that are referenced but not yet downloaded.
+    """
+    patient_id = payload.get("patient_id")
+    encounter_id = payload.get("encounter_id")
+    data = payload.get("data", payload)
+
+    # Extract document refs from payload
+    refs = extract_document_refs(data, patient_id, encounter_id)
+
+    # Find missing
+    detector = get_artifact_detector()
+    missing = detector.find_missing(refs)
+
+    return {
+        "total_refs": len(refs),
+        "missing_count": len(missing),
+        "missing": [m.to_dict() for m in missing],
+        "downloadable": [m.to_dict() for m in missing if m.reason == "not_in_store"],
+    }
+
+
+@app.post("/artifacts/download")
+async def download_document(request: dict):
+    """
+    Download a document using HTTP-first strategy.
+
+    Args (in request body):
+        url: URL to download
+        filename: Suggested filename
+        patient_id: Optional patient ID for provenance
+        encounter_id: Optional encounter ID for provenance
+        skip_selenium: If true, don't attempt Selenium fallback
+    """
+    url = request.get("url")
+    if not url:
+        return {"error": "url is required"}
+
+    filename = request.get("filename", "document.pdf")
+    patient_id = request.get("patient_id")
+    encounter_id = request.get("encounter_id")
+    skip_selenium = request.get("skip_selenium", True)  # Default to HTTP-only
+
+    # Get session context
+    ctx = get_session_context()
+    if not ctx:
+        return {
+            "error": "No session context available",
+            "hint": "Extension must send session context first via POST /session/context"
+        }
+
+    # Add patient/encounter hints
+    if patient_id:
+        ctx = ctx.with_patient(patient_id)
+    if encounter_id:
+        ctx = ctx.with_encounter(encounter_id)
+
+    # Download
+    dm = get_download_manager()
+    outcome = dm.download(ctx=ctx, url=url, filename_hint=filename, skip_selenium=skip_selenium)
+
+    # Update artifact index if successful
+    if outcome.ok and outcome.artifact:
+        index = get_artifact_index()
+        index.add_doc(outcome.artifact.artifact_id)
+
+    return outcome.to_dict()
+
+
+@app.post("/artifacts/batch-download")
+async def batch_download_documents(request: dict):
+    """
+    Download multiple documents.
+
+    Args (in request body):
+        documents: List of {url, filename} objects
+        patient_id: Optional patient ID for all documents
+        skip_selenium: If true, don't attempt Selenium fallback
+    """
+    documents = request.get("documents", [])
+    if not documents:
+        return {"error": "documents list is required"}
+
+    patient_id = request.get("patient_id")
+    skip_selenium = request.get("skip_selenium", True)
+
+    ctx = get_session_context()
+    if not ctx:
+        return {"error": "No session context available"}
+
+    if patient_id:
+        ctx = ctx.with_patient(patient_id)
+
+    dm = get_download_manager()
+    index = get_artifact_index()
+
+    results = []
+    success_count = 0
+
+    for doc in documents:
+        url = doc.get("url")
+        if not url:
+            continue
+
+        filename = doc.get("filename", "document.pdf")
+        outcome = dm.download(ctx=ctx, url=url, filename_hint=filename, skip_selenium=skip_selenium)
+
+        if outcome.ok and outcome.artifact:
+            index.add_doc(outcome.artifact.artifact_id)
+            success_count += 1
+
+        results.append({
+            "url": url,
+            "outcome": outcome.to_dict()
+        })
+
+    return {
+        "total": len(documents),
+        "success": success_count,
+        "failed": len(documents) - success_count,
+        "results": results,
+    }
+
+
+@app.get("/artifacts/index/stats")
+async def artifact_index_stats():
+    """Get artifact index statistics."""
+    index = get_artifact_index()
+    return {
+        "indexed_count": index.count(),
+    }
+
+
+# ==============================================================================
+# LAYER 6: VASCULAR SURGERY EXTRACTORS (PREOP PLANNING)
+# ==============================================================================
+
+@app.get("/vascular/{patient_id}")
+async def get_vascular_assessment(patient_id: str, surgery_type: str = "vascular"):
+    """
+    Get complete vascular surgery preoperative assessment.
+
+    Returns PAD, Carotid, AAA assessments plus antithrombotic bridging plan.
+    """
+    # Gather clinical data from cache
+    cache = manager.patient_cache.get(patient_id, {})
+
+    clinical_data = {
+        'medications': cache.get('medications', []),
+        'problems': cache.get('problems', []),
+        'vitals': cache.get('vitals', []),
+        'notes': cache.get('notes', []),
+        'imaging': cache.get('imaging', []),
+        'results': cache.get('results', []),
+        'surgical_history': cache.get('surgical_history', []),
+    }
+
+    # Also check clinical_cache from interpreters
+    if patient_id in manager.clinical_cache:
+        interp_data = manager.clinical_cache[patient_id]
+        if 'medication' in interp_data:
+            clinical_data['medications'].extend(interp_data['medication'])
+        if 'problem' in interp_data:
+            clinical_data['problems'].extend(interp_data['problem'])
+
+    assessment = extract_vascular_assessment(patient_id, clinical_data, surgery_type)
+
+    return {
+        "patient_id": patient_id,
+        "assessment": assessment.to_dict(),
+        "preop_summary": assessment.generate_preop_summary(),
+    }
+
+
+@app.get("/vascular/{patient_id}/pad")
+async def get_pad_assessment(patient_id: str):
+    """
+    Get PAD (Peripheral Arterial Disease) assessment.
+
+    Includes: ABI/TBI, Rutherford classification, CLI status, amputation risk.
+    """
+    cache = manager.patient_cache.get(patient_id, {})
+    clinical_data = {
+        'medications': cache.get('medications', []),
+        'problems': cache.get('problems', []),
+        'vitals': cache.get('vitals', []),
+        'notes': cache.get('notes', []),
+        'surgical_history': cache.get('surgical_history', []),
+    }
+
+    extractor = PADExtractor()
+    assessment = extractor.extract(patient_id, clinical_data)
+
+    return {
+        "patient_id": patient_id,
+        "pad_assessment": assessment.to_dict(),
+    }
+
+
+@app.get("/vascular/{patient_id}/carotid")
+async def get_carotid_assessment(patient_id: str):
+    """
+    Get carotid disease assessment.
+
+    Includes: Stenosis %, symptom status, intervention recommendation.
+    """
+    cache = manager.patient_cache.get(patient_id, {})
+    clinical_data = {
+        'problems': cache.get('problems', []),
+        'results': cache.get('results', []),
+        'imaging': cache.get('imaging', []),
+        'notes': cache.get('notes', []),
+        'surgical_history': cache.get('surgical_history', []),
+    }
+
+    extractor = CarotidExtractor()
+    assessment = extractor.extract(patient_id, clinical_data)
+
+    return {
+        "patient_id": patient_id,
+        "carotid_assessment": assessment.to_dict(),
+    }
+
+
+@app.get("/vascular/{patient_id}/aaa")
+async def get_aaa_assessment(patient_id: str):
+    """
+    Get AAA (Abdominal Aortic Aneurysm) assessment.
+
+    Includes: Diameter, growth rate, rupture risk, EVAR suitability.
+    """
+    cache = manager.patient_cache.get(patient_id, {})
+    clinical_data = {
+        'problems': cache.get('problems', []),
+        'results': cache.get('results', []),
+        'imaging': cache.get('imaging', []),
+        'notes': cache.get('notes', []),
+        'surgical_history': cache.get('surgical_history', []),
+    }
+
+    extractor = AAAExtractor()
+    assessment = extractor.extract(patient_id, clinical_data)
+
+    return {
+        "patient_id": patient_id,
+        "aaa_assessment": assessment.to_dict(),
+    }
+
+
+@app.get("/vascular/{patient_id}/bridging")
+async def get_bridging_plan(patient_id: str, surgery_type: str = "vascular", surgery_date: Optional[str] = None):
+    """
+    Get antithrombotic bridging plan for perioperative management.
+
+    Includes: Hold recommendations, restart timing, bridging needs.
+    """
+    cache = manager.patient_cache.get(patient_id, {})
+    medications = cache.get('medications', [])
+    problems = cache.get('problems', [])
+
+    # Also include interpreted medications
+    if patient_id in manager.clinical_cache:
+        interp_data = manager.clinical_cache[patient_id]
+        if 'medication' in interp_data:
+            medications.extend(interp_data['medication'])
+        if 'problem' in interp_data:
+            problems.extend(interp_data['problem'])
+
+    calculator = AntithromboticBridgingCalculator()
+    plan = calculator.calculate_bridging_plan(
+        patient_id=patient_id,
+        medications=medications,
+        problems=problems,
+        surgery_type=surgery_type,
+        surgery_date=surgery_date
+    )
+
+    return {
+        "patient_id": patient_id,
+        "bridging_plan": plan.to_dict(),
+    }
+
+
+@app.get("/vascular/antithrombotics/database")
+async def get_antithrombotic_database():
+    """
+    Get the antithrombotic medication database with bridging parameters.
+
+    Reference for hold times, restart timing, and reversal agents.
+    """
+    return {
+        "medications": {k: v.to_dict() for k, v in ANTITHROMBOTIC_DATABASE.items()},
+        "count": len(ANTITHROMBOTIC_DATABASE),
+    }
+
+
+@app.post("/vascular/preop-summary")
+async def generate_preop_summary(request: dict):
+    """
+    Generate complete preoperative summary for surgical planning.
+
+    Pass clinical data directly for patients not in cache.
+    """
+    patient_id = request.get("patient_id", "unknown")
+    clinical_data = request.get("clinical_data", {})
+    surgery_type = request.get("surgery_type", "vascular")
+
+    assessment = extract_vascular_assessment(patient_id, clinical_data, surgery_type)
+
+    return {
+        "patient_id": patient_id,
+        "assessment": assessment.to_dict(),
+        "preop_summary": assessment.generate_preop_summary(),
+    }
 
 
 if __name__ == "__main__":
