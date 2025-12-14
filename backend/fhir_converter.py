@@ -92,6 +92,42 @@ def detect_record_type(endpoint: str, payload: Any) -> str:
     logger.debug(f"[FHIR] Detecting record type for: {endpoint_lower[:80]}...")
 
     # =========================================================================
+    # ACTIVE FETCH URL PATTERNS (synthetic URLs from activeFetcher.js)
+    # Pattern: active-fetch/FETCH_<type>
+    # =========================================================================
+    if 'active-fetch/' in endpoint_lower:
+        # These are compound payloads from active fetch - they contain multiple data types
+        if 'fetch_preop' in endpoint_lower or 'fetch_all' in endpoint_lower or 'fetch_current' in endpoint_lower:
+            logger.info(f"[FHIR] Record type: COMPOUND (active fetch - preop/all)")
+            return 'compound'
+        elif 'fetch_intraop' in endpoint_lower:
+            logger.info(f"[FHIR] Record type: COMPOUND (active fetch - intraop)")
+            return 'compound'
+        elif 'fetch_postop' in endpoint_lower:
+            logger.info(f"[FHIR] Record type: COMPOUND (active fetch - postop)")
+            return 'compound'
+        # Single-type fetches
+        elif 'medication' in endpoint_lower:
+            logger.info(f"[FHIR] Record type: MEDICATION (active fetch)")
+            return 'medication'
+        elif 'problem' in endpoint_lower or 'condition' in endpoint_lower:
+            logger.info(f"[FHIR] Record type: PROBLEM (active fetch)")
+            return 'problem'
+        elif 'vital' in endpoint_lower:
+            logger.info(f"[FHIR] Record type: VITAL (active fetch)")
+            return 'vital'
+        elif 'allerg' in endpoint_lower:
+            logger.info(f"[FHIR] Record type: ALLERGY (active fetch)")
+            return 'allergy'
+        elif 'lab' in endpoint_lower:
+            logger.info(f"[FHIR] Record type: LAB (active fetch)")
+            return 'lab'
+        else:
+            # Default active fetch payloads to compound since they usually contain multiple types
+            logger.info(f"[FHIR] Record type: COMPOUND (active fetch - default)")
+            return 'compound'
+
+    # =========================================================================
     # ATHENA-SPECIFIC URL PATTERNS (query parameter based)
     # Pattern: /ax/data?sources=<type>&...
     # =========================================================================
@@ -308,33 +344,69 @@ def convert_medications(payload: Any) -> List[FHIRMedication]:
             freq = ''
             status = 'active'
 
-            # ATHENA SPECIFIC: Medication info is in Events array
-            # Structure: {'__CLASS__': 'Athena::Chart::Entity::Medication', 'Events': [...]}
+            # =========================================================================
+            # ATHENA SPECIFIC: Medication info is DEEPLY NESTED
+            # Correct structure (verified from actual traffic analysis):
+            #
+            # Medications[] → {
+            #     Events[] → {
+            #         Instance: {
+            #             DisplayName: "clopidogrel"      ← DRUG NAME HERE
+            #             UnstructuredSig: "TAKE ONE..."  ← DOSING HERE
+            #             Medication: {
+            #                 TherapeuticClass: "..."
+            #             }
+            #         }
+            #     }
+            # }
+            # =========================================================================
             if 'Events' in med and isinstance(med.get('Events'), list):
                 events = med.get('Events', [])
                 if events:
-                    # Log first event structure for debugging
-                    first_event = events[0] if events else {}
-                    if isinstance(first_event, dict):
-                        event_keys = list(first_event.keys())[:15]
-                        logger.debug(f"[FHIR] Athena Event keys: {event_keys}")
-
-                    # Extract from first event (most recent)
                     for event in events:
                         if isinstance(event, dict):
-                            # Try various Athena medication name fields
-                            name = (event.get('MedicationName') or event.get('NDCDescription') or
-                                    event.get('BrandName') or event.get('GenericName') or
-                                    event.get('DrugName') or event.get('Name') or
-                                    event.get('Description') or '')
-                            dose = (event.get('StrengthDescription') or event.get('Strength') or
-                                    event.get('Dosage') or event.get('Dose') or '')
-                            freq = (event.get('SigDescription') or event.get('Sig') or
-                                    event.get('Frequency') or event.get('Directions') or '')
-                            status = event.get('Status') or event.get('MedicationStatus') or 'active'
+                            # THE KEY INSIGHT: Data is in event.Instance, not event directly
+                            instance = event.get('Instance', {})
 
-                            if name:
-                                break  # Found a name, stop searching
+                            if isinstance(instance, dict):
+                                # Primary drug name field
+                                name = instance.get('DisplayName', '')
+
+                                # Dosing information (sig = "signetur" = directions)
+                                freq = instance.get('UnstructuredSig', '')
+
+                                # Try to get structured dose from nested Medication object
+                                medication_obj = instance.get('Medication', {})
+                                if isinstance(medication_obj, dict):
+                                    # TherapeuticClass can inform dose context
+                                    therapeutic_class = medication_obj.get('TherapeuticClass', '')
+                                    product_name = medication_obj.get('ProductName', '')
+                                    if not name:
+                                        name = product_name
+
+                                # Quantity as dose surrogate
+                                quantity = instance.get('QuantityValue')
+                                if quantity:
+                                    dose = f"Qty: {quantity}"
+
+                                # Event type as status proxy
+                                event_type = event.get('Type', '')  # ENTER, FILL, STOP, etc.
+                                if event_type == 'STOP':
+                                    status = 'stopped'
+                                elif event_type in ['ENTER', 'FILL']:
+                                    status = 'active'
+
+                                if name:
+                                    logger.debug(f"[FHIR] Extracted med from Instance: {name[:40]}")
+                                    break  # Found a name, stop searching
+
+                            # Fallback: try direct event keys (older format)
+                            if not name:
+                                name = (event.get('MedicationName') or event.get('NDCDescription') or
+                                        event.get('BrandName') or event.get('GenericName') or
+                                        event.get('DrugName') or event.get('Name') or '')
+                                if name:
+                                    break
 
             # Standard keys (camelCase) - fallback
             if not name:
@@ -381,7 +453,27 @@ def convert_medications(payload: Any) -> List[FHIRMedication]:
 
 
 def convert_problems(payload: Any) -> List[FHIRCondition]:
-    """Convert AthenaNet problems/diagnoses to FHIR Condition list."""
+    """
+    Convert AthenaNet problems/diagnoses to FHIR Condition list.
+
+    ATHENA STRUCTURE (verified from traffic analysis):
+    active_problems.Problems[] = {
+        Name: "intermittent claudication..."      ← PRIMARY DISPLAY NAME
+        Code: {
+            Code: "12236951000119108"             ← SNOMED CODE
+            Description: "..."                    ← SNOMED DESCRIPTION
+            CodeSet: "SNOMED"
+        }
+        PatientSnomedICD10s: [                    ← ICD-10 MAPPINGS
+            {
+                DIAGNOSISCODE: "I70213"           ← ICD-10 CODE
+                FULLDESCRIPTION: "..."            ← ICD-10 DESCRIPTION
+            }
+        ]
+        Status: "active"
+        Primary: false
+    }
+    """
     conditions = []
 
     # Handle various payload structures
@@ -389,8 +481,11 @@ def convert_problems(payload: Any) -> List[FHIRCondition]:
     if isinstance(payload, list):
         prob_list = payload
     elif isinstance(payload, dict):
+        # Athena structure: active_problems.Problems[]
+        if 'Problems' in payload:
+            prob_list = payload.get('Problems', [])
         # Handle IMO Health categorized format: {'categories': [{'problems': [...]}]}
-        if 'categories' in payload:
+        elif 'categories' in payload:
             for category in payload.get('categories', []):
                 cat_problems = category.get('problems', [])
                 prob_list.extend(cat_problems)
@@ -401,24 +496,62 @@ def convert_problems(payload: Any) -> List[FHIRCondition]:
 
     for prob in prob_list:
         if isinstance(prob, dict):
-            code = prob.get('icd10') or prob.get('code') or prob.get('diagnosisCode') or prob.get('lexical_code') or ''
-            display = prob.get('description') or prob.get('title') or prob.get('name') or prob.get('problemName') or ''
-            status = prob.get('status', 'active')
+            # =========================================================================
+            # ATHENA SPECIFIC: Extract from nested structure
+            # =========================================================================
+
+            # Primary display name - Athena uses PascalCase 'Name'
+            display = (prob.get('Name') or prob.get('name') or
+                       prob.get('description') or prob.get('title') or
+                       prob.get('problemName') or '')
+
+            # SNOMED code from Code object
+            code_obj = prob.get('Code', {})
+            snomed_code = ''
+            if isinstance(code_obj, dict):
+                snomed_code = code_obj.get('Code', '')
+                # Use SNOMED description as fallback display
+                if not display:
+                    display = code_obj.get('Description', '')
+
+            # ICD-10 code from PatientSnomedICD10s array
+            icd10_code = ''
+            icd10_mappings = prob.get('PatientSnomedICD10s', [])
+            if isinstance(icd10_mappings, list) and icd10_mappings:
+                first_mapping = icd10_mappings[0]
+                if isinstance(first_mapping, dict):
+                    icd10_code = first_mapping.get('DIAGNOSISCODE', '')
+                    # Use ICD-10 description as fallback
+                    if not display:
+                        display = first_mapping.get('FULLDESCRIPTION', '')
+
+            # Use ICD-10 if available, otherwise SNOMED
+            code = icd10_code or snomed_code or prob.get('icd10') or prob.get('code') or ''
+
+            # Status (Athena may use None, which should default to active)
+            status = prob.get('Status') or prob.get('status') or 'active'
+            if status is None:
+                status = 'active'
+
             onset = normalize_date(prob.get('onsetDate') or prob.get('startDate'))
 
-            conditions.append(FHIRCondition(
-                id=generate_id(prob),
-                code=str(code),
-                display=str(display),
-                clinicalStatus=str(status),
-                onsetDateTime=onset if onset else None
-            ))
+            if display:  # Only add if we have a name
+                conditions.append(FHIRCondition(
+                    id=generate_id(prob),
+                    code=str(code),
+                    display=str(display),
+                    clinicalStatus=str(status).lower(),
+                    onsetDateTime=onset if onset else None
+                ))
+                logger.debug(f"[FHIR] Extracted problem: {display[:50]} ({code})")
+
         elif isinstance(prob, str):
             conditions.append(FHIRCondition(
                 id=generate_id(prob),
                 display=prob
             ))
 
+    logger.info(f"[FHIR] Converted {len(conditions)} problems/conditions")
     return conditions
 
 
@@ -461,38 +594,69 @@ def convert_to_fhir(endpoint: str, method: str, payload: Any) -> Tuple[str, Any]
     Returns:
         Tuple of (record_type, fhir_resource)
     """
-    # Check for compound payload FIRST (contains multiple data types)
-    if isinstance(payload, dict):
-        compound_keys = {'medications', 'vitals', 'labs', 'orders', 'problems', 'allergies'}
+    # Detect record type first - this now handles active-fetch URLs
+    record_type = detect_record_type(endpoint, payload)
+
+    # For compound payloads (from active fetch or multi-source requests)
+    if record_type == 'compound' and isinstance(payload, dict):
+        logger.info(f"[FHIR] Processing COMPOUND payload with keys: {list(payload.keys())[:10]}")
+        result = {'_compound': True}
+
+        # Handle both standard keys and nested structures from active fetch
+        # Active fetch may return: {medications: {success: true, data: [...]}, ...}
+
+        # Extract medications
+        meds_data = _extract_nested_data(payload, ['medications', 'activeMedications', 'active_medications'])
+        if meds_data:
+            converted_meds = convert_medications(meds_data)
+            result['medications'] = [m.dict() for m in converted_meds]
+            logger.info(f"[FHIR] Extracted {len(result['medications'])} medications from compound")
+
+        # Extract problems/conditions
+        probs_data = _extract_nested_data(payload, ['problems', 'activeProblems', 'active_problems', 'conditions'])
+        if probs_data:
+            converted_probs = convert_problems(probs_data)
+            result['conditions'] = [c.dict() for c in converted_probs]
+            logger.info(f"[FHIR] Extracted {len(result['conditions'])} conditions from compound")
+
+        # Extract vitals
+        vitals_data = _extract_nested_data(payload, ['vitals', 'measurements'])
+        if vitals_data:
+            result['vitals'] = convert_vitals(vitals_data)
+            logger.info(f"[FHIR] Extracted vitals from compound")
+
+        # Extract allergies
+        allergies_data = _extract_nested_data(payload, ['allergies', 'allergy'])
+        if allergies_data:
+            result['allergies'] = allergies_data
+            logger.info(f"[FHIR] Extracted allergies from compound")
+
+        # Extract labs
+        labs_data = _extract_nested_data(payload, ['labs', 'labResults', 'lab_results'])
+        if labs_data:
+            result['labs'] = labs_data
+            logger.info(f"[FHIR] Extracted labs from compound")
+
+        # Extract demographics/patient info
+        demo_data = _extract_nested_data(payload, ['demographics', 'patient', 'patientInfo'])
+        if demo_data:
+            patient_id = payload.get('patientId') or payload.get('_meta', {}).get('chartId')
+            result['patient'] = convert_patient(demo_data, patient_id)
+            logger.info(f"[FHIR] Extracted demographics from compound")
+
+        return 'compound', result
+
+    # Check for compound payload by keys (fallback for non-active-fetch URLs)
+    if record_type != 'compound' and isinstance(payload, dict):
+        compound_keys = {'medications', 'vitals', 'labs', 'orders', 'problems', 'allergies', 'demographics'}
         present_keys = set(payload.keys()) & compound_keys
 
         if len(present_keys) >= 2:
-            logger.info(f"[FHIR] COMPOUND PAYLOAD detected with keys: {present_keys}")
-            # Return as compound type with all data
-            result = {'_compound': True}
+            logger.info(f"[FHIR] COMPOUND PAYLOAD detected by keys: {present_keys}")
+            # Re-process as compound
+            return convert_to_fhir(endpoint, method, payload)
 
-            if 'medications' in payload and payload['medications']:
-                meds = payload['medications']
-                if isinstance(meds, list):
-                    result['medications'] = [m.dict() for m in convert_medications(meds)]
-                    logger.info(f"[FHIR] Extracted {len(result['medications'])} medications from compound payload")
-
-            if 'vitals' in payload and payload['vitals']:
-                result['vitals'] = convert_vitals(payload['vitals'])
-
-            if 'labs' in payload and payload['labs']:
-                result['labs'] = payload['labs']
-
-            if 'problems' in payload and payload['problems']:
-                result['conditions'] = [c.dict() for c in convert_problems(payload['problems'])]
-
-            if 'allergies' in payload and payload['allergies']:
-                result['allergies'] = payload['allergies']
-
-            return 'compound', result
-
-    record_type = detect_record_type(endpoint, payload)
-
+    # Handle single record types
     if record_type == 'vital':
         return record_type, convert_vitals(payload)
     elif record_type == 'medication':
@@ -502,9 +666,59 @@ def convert_to_fhir(endpoint: str, method: str, payload: Any) -> Tuple[str, Any]
     elif record_type == 'patient':
         patient_id = extract_patient_id(endpoint)
         return record_type, convert_patient(payload, patient_id)
+    elif record_type == 'allergy':
+        return record_type, payload
+    elif record_type == 'lab':
+        return record_type, payload
+    elif record_type == 'note':
+        return record_type, payload
     else:
         # Return raw payload for unknown types
         return record_type, payload
+
+
+def _extract_nested_data(payload: dict, key_options: list) -> Any:
+    """
+    Extract data from payload, handling both direct keys and nested {success, data} structures.
+
+    Handles:
+    - Direct: payload['medications'] = [...]
+    - Nested: payload['medications'] = {'success': True, 'data': [...]}
+    - Athena: payload['medications'] = {'active_medications': {'Medications': [...]}}
+    """
+    for key in key_options:
+        if key in payload:
+            value = payload[key]
+
+            # Skip failed responses
+            if isinstance(value, dict):
+                if value.get('success') == False:
+                    logger.debug(f"[FHIR] Skipping failed response for key: {key}")
+                    continue
+
+                # Handle {success: true, data: [...]} structure
+                if 'data' in value:
+                    return value['data']
+
+                # Handle nested Athena structures
+                if 'active_medications' in value:
+                    inner = value['active_medications']
+                    return inner.get('Medications') or inner.get('medications') or inner
+                if 'active_problems' in value:
+                    inner = value['active_problems']
+                    return inner.get('Problems') or inner.get('problems') or inner
+                if 'allergies' in value and isinstance(value['allergies'], (list, dict)):
+                    return value['allergies']
+
+                # Return dict as-is if it has meaningful data
+                if value and not value.get('error'):
+                    return value
+
+            # Direct list or other value
+            if value:
+                return value
+
+    return None
 
 
 def build_patient_from_aggregated_data(

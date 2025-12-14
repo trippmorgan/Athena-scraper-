@@ -1,0 +1,5287 @@
+{
+  "meta": {
+    "total_events": 812,
+    "analysis_timestamp": "2025-12-13T16:55:43.943872",
+    "file_analyzed": "data/raw_events.jsonl"
+  },
+  "endpoints": {
+    "active-fetch/FETCH_PREOP": {
+      "count": 115,
+      "methods": [
+        "ACTIVE"
+      ],
+      "total_size": 121630,
+      "patient_ids": [],
+      "clinical_category": "active_fetch",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "raw",
+          "surgical"
+        ]
+      },
+      "avg_size": 1057
+    },
+    "active-fetch/FETCH_INTRAOP": {
+      "count": 115,
+      "methods": [
+        "ACTIVE"
+      ],
+      "total_size": 53450,
+      "patient_ids": [
+        "35212677"
+      ],
+      "clinical_category": "active_fetch",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "documents",
+          "allergies"
+        ]
+      },
+      "avg_size": 464
+    },
+    "active-fetch/FETCH_POSTOP": {
+      "count": 102,
+      "methods": [
+        "ACTIVE"
+      ],
+      "total_size": 23860,
+      "patient_ids": [
+        "35212677"
+      ],
+      "clinical_category": "active_fetch",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "vitals"
+        ],
+        "vitals": {
+          "_type": "object",
+          "_keys": [
+            "success",
+            "error",
+            "endpoint"
+          ]
+        }
+      },
+      "avg_size": 233
+    },
+    "/{id}/65/ax/data?sources=encounter_section_attributions": {
+      "count": 28,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 9944,
+      "patient_ids": [],
+      "clinical_category": "encounter",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "encounter_section_attributions"
+        ]
+      },
+      "avg_size": 355
+    },
+    "/{id}/65/ax/encounter/{id}/jotter_images?...": {
+      "count": 27,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 0,
+      "patient_ids": [
+        "185396390"
+      ],
+      "clinical_category": "encounter",
+      "sample_payload_structure": null,
+      "avg_size": 0
+    },
+    "/{id}/65/ax/data?sources=encounter_and_chart_security_labels": {
+      "count": 14,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 602,
+      "patient_ids": [
+        "35212677"
+      ],
+      "clinical_category": "lab",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "encounter_and_chart_security_labels"
+        ],
+        "encounter_and_chart_security_labels": {
+          "_type": "object",
+          "_keys": []
+        }
+      },
+      "avg_size": 43
+    },
+    "/{id}/65/ax/data?sources=encounter_security_labels": {
+      "count": 12,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 396,
+      "patient_ids": [],
+      "clinical_category": "lab",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "encounter_security_labels"
+        ],
+        "encounter_security_labels": {
+          "_type": "object",
+          "_keys": []
+        }
+      },
+      "avg_size": 33
+    },
+    "/{id}/65/ax/data?sources=stage_procedure_vitals": {
+      "count": 12,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 19122,
+      "patient_ids": [
+        "35212677"
+      ],
+      "clinical_category": "vital",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "stage_procedure_vitals"
+        ],
+        "stage_procedure_vitals": {
+          "_type": "object",
+          "_keys": [
+            "__CLASS__",
+            "MUCMeta",
+            "VersionToken",
+            "VitalGroups"
+          ],
+          "VitalGroups": {
+            "_type": "array",
+            "_length": 2,
+            "_items": {
+              "_truncated": true
+            }
+          }
+        }
+      },
+      "avg_size": 1593
+    },
+    "/{id}/65/ax/data?sources=historical_clinical_encounter_hashes": {
+      "count": 12,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 7078,
+      "patient_ids": [
+        "35212677"
+      ],
+      "clinical_category": "encounter",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "historical_clinical_encounter_hashes"
+        ]
+      },
+      "avg_size": 589
+    },
+    "/{id}/65/ax/data?sources=screening": {
+      "count": 11,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 187,
+      "patient_ids": [
+        "35212677"
+      ],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "screening"
+        ]
+      },
+      "avg_size": 17
+    },
+    "/{id}/65/ax/security_label/chart/{id}/security_labels?...": {
+      "count": 10,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 0,
+      "patient_ids": [
+        "24547563"
+      ],
+      "clinical_category": "lab",
+      "sample_payload_structure": null,
+      "avg_size": 0
+    },
+    "/{id}/65/ax/encounter/{id}/image_documentation?...": {
+      "count": 9,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 1103,
+      "patient_ids": [
+        "185396390"
+      ],
+      "clinical_category": "document",
+      "sample_payload_structure": {
+        "_type": "array",
+        "_length": 1,
+        "_items": {
+          "_type": "object",
+          "_keys": [
+            "image_header",
+            "document_class",
+            "image_html",
+            "document_id",
+            "document_subclass"
+          ],
+          "document_id": {
+            "_type": "string",
+            "_length": 10,
+            "_sample": "[REDACTED]"
+          }
+        }
+      },
+      "avg_size": 122
+    },
+    "https://hospitalclinicalnano.api.athena.io/clinicals-external-data/api/v1/externaldata/manualReconciliation/MedicationDispense/{id}/{id}": {
+      "count": 8,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 0,
+      "patient_ids": [
+        "24547563"
+      ],
+      "clinical_category": "medication",
+      "sample_payload_structure": null,
+      "avg_size": 0
+    },
+    "/{id}/65/ax/data?sources=patients_blocked_status": {
+      "count": 7,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 2597,
+      "patient_ids": [],
+      "clinical_category": "demographic",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "patients_blocked_status"
+        ],
+        "patients_blocked_status": {
+          "_type": "object",
+          "_keys": [
+            "18888483",
+            "18889850",
+            "18893243",
+            "18897109",
+            "30167443",
+            "33722271",
+            "33791654",
+            "35086592",
+            "35278300",
+            "35312168"
+          ]
+        }
+      },
+      "avg_size": 371
+    },
+    "/{id}/65/ax/encounter/{id}/save_sections_reviewed": {
+      "count": 7,
+      "methods": [
+        "POST"
+      ],
+      "total_size": 601,
+      "patient_ids": [
+        "185396390"
+      ],
+      "clinical_category": "encounter",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "PATIENTALLERGY.REVIEWED"
+        ],
+        "PATIENTALLERGY.REVIEWED": {
+          "_type": "object",
+          "_keys": [
+            "REVIEWED",
+            "UNREVIEWED"
+          ]
+        }
+      },
+      "avg_size": 85
+    },
+    "https://hospitalclinicalnano.api.athena.io/clinicals-external-data/api/v1/externaldata/manualReconciliation/AllergyIntolerance/{id}/{id}": {
+      "count": 6,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 0,
+      "patient_ids": [
+        "24547563"
+      ],
+      "clinical_category": "allergy",
+      "sample_payload_structure": null,
+      "avg_size": 0
+    },
+    "/{id}/65/ax/medications/persistence/chart_has_classic_coumadin_flowsheet?...": {
+      "count": 6,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 0,
+      "patient_ids": [],
+      "clinical_category": "medication",
+      "sample_payload_structure": null,
+      "avg_size": 0
+    },
+    "/{id}/65/ax/data?sources=document_findings": {
+      "count": 6,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 2466,
+      "patient_ids": [],
+      "clinical_category": "document",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "document_findings"
+        ]
+      },
+      "avg_size": 411
+    },
+    "/{id}/65/ax/data?sources=chart_security_labels": {
+      "count": 6,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 174,
+      "patient_ids": [],
+      "clinical_category": "lab",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "chart_security_labels"
+        ],
+        "chart_security_labels": {
+          "_type": "object",
+          "_keys": []
+        }
+      },
+      "avg_size": 29
+    },
+    "/{id}/65/ax/data?sources=unredacted_magic_words_by_paperform_id": {
+      "count": 6,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 336,
+      "patient_ids": [
+        "35212677"
+      ],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "unredacted_magic_words_by_paperform_id"
+        ],
+        "unredacted_magic_words_by_paperform_id": {
+          "_type": "object",
+          "_keys": [
+            "3165"
+          ]
+        }
+      },
+      "avg_size": 56
+    },
+    "/{id}/65/ax/data?sources=dashboard_postings": {
+      "count": 5,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 124396,
+      "patient_ids": [],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "recent_user_data",
+          "user_preferences",
+          "dashboard_postings"
+        ]
+      },
+      "avg_size": 24879
+    },
+    "/{id}/65/ax/data?sources=all_practice_roles": {
+      "count": 5,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 646735,
+      "patient_ids": [],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "delegated_sign_off",
+          "user_practice_roles",
+          "widget_data",
+          "is_beta_coordinator",
+          "all_practice_roles",
+          "selected_inbox_departments",
+          "inbox_departments",
+          "sign_off_documents",
+          "athena_users"
+        ],
+        "widget_data": {
+          "_type": "null"
+        }
+      },
+      "avg_size": 129347
+    },
+    "/{id}/65/ax/data?sources=eligibility_by_appointment_id": {
+      "count": 5,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 60213,
+      "patient_ids": [],
+      "clinical_category": "encounter",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "lab_results_info_by_appointment_id",
+          "telehealth_one_way_messages_by_appointment_id",
+          "schedule_departments",
+          "previous_names",
+          "encounter_reasons_for_schedule",
+          "user",
+          "patient_image_info",
+          "telehealth_status_by_appointment_id",
+          "frequently_selected_schedule_picker_items",
+          "schedule_state",
+          "insurance_names_by_visit",
+          "phone_call_info",
+          "telehealth_enabled_department",
+          "appointments",
+          "room_status_info",
+          "telehealth_patient_online_status_by_appointment_id",
+          "hospital_patients_by_id",
+          "providers",
+          "telehealth_patient_waiting_by_appointment_id",
+          "hospital_visits_and_appointments"
+        ],
+        "lab_results_info_by_appointment_id": {
+          "_type": "object",
+          "_keys": []
+        },
+        "telehealth_one_way_messages_by_appointment_id": {
+          "_type": "object",
+          "_keys": []
+        },
+        "previous_names": {
+          "_type": "object",
+          "_keys": []
+        },
+        "patient_image_info": {
+          "_type": "object",
+          "_keys": []
+        },
+        "telehealth_status_by_appointment_id": {
+          "_type": "object",
+          "_keys": []
+        }
+      },
+      "avg_size": 12042
+    },
+    "/{id}/65/ax/data?sources=inbox_users": {
+      "count": 5,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 7971570,
+      "patient_ids": [],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "assignee_coverages_list_view",
+          "user_lookup",
+          "assignee_coverages",
+          "inbox_users",
+          "assigned_to",
+          "handled_inbox_categories",
+          "inbox_warnings"
+        ]
+      },
+      "avg_size": 1594314
+    },
+    "/{id}/65/ax/data?sources=hcc_config_hide_raf_weight": {
+      "count": 5,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 165,
+      "patient_ids": [
+        "35212677"
+      ],
+      "clinical_category": "vital",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "hcc_config_hide_raf_weight"
+        ],
+        "hcc_config_hide_raf_weight": {
+          "_type": "number",
+          "_sample": 1
+        }
+      },
+      "avg_size": 33
+    },
+    "/{id}/65/ax/data?sources=department_info": {
+      "count": 5,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 3400,
+      "patient_ids": [],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "department_info"
+        ]
+      },
+      "avg_size": 680
+    },
+    "/{id}/65/ax/documents/search/{id}?...": {
+      "count": 5,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 11420,
+      "patient_ids": [],
+      "clinical_category": "document",
+      "sample_payload_structure": {
+        "_type": "array",
+        "_length": 10,
+        "_items": {
+          "_type": "object",
+          "_keys": [
+            "suggestion_type",
+            "suggestion_value",
+            "suggestion",
+            "parent_num",
+            "ID",
+            "bucket_selected",
+            "disabled",
+            "count"
+          ],
+          "ID": {
+            "_type": "string",
+            "_length": 5,
+            "_sample": "ADMIN"
+          }
+        }
+      },
+      "avg_size": 2284
+    },
+    "/{id}/65/ax/data?sources=classic_document": {
+      "count": 5,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 136750,
+      "patient_ids": [],
+      "clinical_category": "document",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "classic_document"
+        ]
+      },
+      "avg_size": 27350
+    },
+    "/{id}/65/ax/documents/get_appointment_tickler_data?...": {
+      "count": 5,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 835,
+      "patient_ids": [],
+      "clinical_category": "document",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "NEXTDATE",
+          "ALARMDAYSHTML",
+          "DEPARTMENTLIST",
+          "PROVIDERLIST",
+          "NUMDAYSHTML",
+          "UPCOMINGDATA",
+          "APPOINTMENTTYPELIST"
+        ],
+        "PROVIDERLIST": {
+          "_type": "null"
+        }
+      },
+      "avg_size": 167
+    },
+    "/{id}/65/ax/data?sources=snomed_to_icd10_map": {
+      "count": 5,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 3025,
+      "patient_ids": [],
+      "clinical_category": "medication",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "snomed_to_icd10_map"
+        ]
+      },
+      "avg_size": 605
+    },
+    "/{id}/65/ax/data?sources=inbox_buckets_data": {
+      "count": 4,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 4634632,
+      "patient_ids": [],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "assigned_to_list_view",
+          "inbox_buckets_data",
+          "inbox_view_by_preferences",
+          "inbox_users_list_view"
+        ]
+      },
+      "avg_size": 1158658
+    },
+    "/{id}/65/ax/data?sources=active_medications": {
+      "count": 4,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 458625,
+      "patient_ids": [
+        "35212677"
+      ],
+      "clinical_category": "medication",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "coumadin_concept_medication_ids",
+          "reconcile_source_info",
+          "reconciliation_sections",
+          "specialty_id_to_name_mapping",
+          "active_medications",
+          "reconcile_count"
+        ],
+        "coumadin_concept_medication_ids": {
+          "_type": "object",
+          "_keys": [
+            "generic_medids",
+            "med_ids"
+          ],
+          "generic_medids": {
+            "_type": "array",
+            "_length": 9,
+            "_items": {
+              "_truncated": true
+            }
+          },
+          "med_ids": {
+            "_type": "array",
+            "_length": 43,
+            "_items": {
+              "_truncated": true
+            }
+          }
+        },
+        "specialty_id_to_name_mapping": {
+          "_type": "null"
+        },
+        "active_medications": {
+          "_type": "object",
+          "_keys": [
+            "LastDownloadedDate",
+            "Medications",
+            "VersionToken",
+            "MUCMeta",
+            "NoMedicationsReported",
+            "NewHistoricalMedicationCount",
+            "NeedsDownloadConsent",
+            "__CLASS__",
+            "FilteredCount",
+            "NewActiveMedicationCount"
+          ],
+          "Medications": {
+            "_type": "array",
+            "_length": 15,
+            "_items": {
+              "_truncated": true
+            }
+          },
+          "NoMedicationsReported": {
+            "_type": "bool",
+            "_sample": false
+          },
+          "NewHistoricalMedicationCount": {
+            "_type": "number",
+            "_sample": 0
+          },
+          "NewActiveMedicationCount": {
+            "_type": "number",
+            "_sample": 0
+          }
+        }
+      },
+      "avg_size": 114656
+    },
+    "/{id}/65/ax/data?sources=active_problems": {
+      "count": 4,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 716331,
+      "patient_ids": [
+        "35212677"
+      ],
+      "clinical_category": "problem",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "hcc_raf_hcc_factors",
+          "is_external_gaps_enabled",
+          "hcc_raf_hcc_interaction_groups",
+          "health_status",
+          "import_alerts",
+          "suspected_non_hcc_diagnoses",
+          "hcc_raf_hcc_interactions",
+          "initial_active_medications",
+          "available_contacts_and_consents",
+          "hcc_resource_extended",
+          "hcc_raf_demographics_factors",
+          "active_problems",
+          "hcc_raf_documented_hccs",
+          "chart_security_labels",
+          "hcc_raf_apcc_factors",
+          "hcc_buddy_code_requirements",
+          "hcc_raf_hcc_exclusions",
+          "hcc_raf_patient_demographic_factor",
+          "active_telehealth_participants",
+          "open_orders"
+        ],
+        "initial_active_medications": {
+          "_type": "object",
+          "_keys": [
+            "LastDownloadedDate",
+            "Note",
+            "Medications",
+            "NoMedicationsReported",
+            "LastDownloadDenied",
+            "NewHistoricalMedicationCount",
+            "NeedsDownloadConsent",
+            "FilteredCount",
+            "LastDownloadDenialReason",
+            "NewActiveMedicationCount"
+          ],
+          "Medications": {
+            "_type": "array",
+            "_length": 15,
+            "_items": {
+              "_truncated": true
+            }
+          },
+          "NoMedicationsReported": {
+            "_type": "number",
+            "_sample": 0
+          },
+          "NewHistoricalMedicationCount": {
+            "_type": "number",
+            "_sample": 0
+          },
+          "NewActiveMedicationCount": {
+            "_type": "number",
+            "_sample": 0
+          }
+        },
+        "available_contacts_and_consents": {
+          "_type": "object",
+          "_keys": [
+            "DONOTCALLYN",
+            "FIRSTNAME",
+            "THIRDPARTYUSER",
+            "CONTACTREASON",
+            "LASTNAME",
+            "PATIENTID",
+            "CONTACTS"
+          ],
+          "FIRSTNAME": {
+            "_type": "string",
+            "_length": 7,
+            "_sample": "CHARLES"
+          },
+          "LASTNAME": {
+            "_type": "string",
+            "_length": 5,
+            "_sample": "YOUNG"
+          },
+          "PATIENTID": {
+            "_type": "string",
+            "_length": 8,
+            "_sample": "35086592"
+          }
+        },
+        "active_problems": {
+          "_type": "object",
+          "_keys": [
+            "PregnancyNotes",
+            "__CLASS__",
+            "FilteredCount",
+            "Problems",
+            "MUCMeta",
+            "VersionToken"
+          ],
+          "Problems": {
+            "_type": "array",
+            "_length": 16,
+            "_items": {
+              "_truncated": true
+            }
+          }
+        },
+        "chart_security_labels": {
+          "_type": "object",
+          "_keys": []
+        },
+        "hcc_buddy_code_requirements": {
+          "_type": "object",
+          "_keys": [
+            "2152",
+            "3707",
+            "3735",
+            "3766",
+            "3794",
+            "3822",
+            "3850",
+            "3878",
+            "3906",
+            "3937",
+            "3965",
+            "10244",
+            "10249",
+            "10252",
+            "10255",
+            "10258",
+            "10259",
+            "22479",
+            "79147",
+            "79180"
+          ]
+        }
+      },
+      "avg_size": 179082
+    },
+    "/{id}/65/ax/data?sources=acute_visit_summaries": {
+      "count": 4,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 610286,
+      "patient_ids": [
+        "35212677"
+      ],
+      "clinical_category": "encounter",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "acute_visit_summaries",
+          "recent_activity_hashes",
+          "briefing_timeline",
+          "recent_result_documents",
+          "recent_clinical_results",
+          "external_encounters",
+          "historical_visits"
+        ]
+      },
+      "avg_size": 152571
+    },
+    "/{id}/65/ax/data?sources=last_closed_encounter_date": {
+      "count": 4,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 180,
+      "patient_ids": [],
+      "clinical_category": "encounter",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "last_closed_encounter_date"
+        ]
+      },
+      "avg_size": 45
+    },
+    "/{id}/65/ax/data?sources=specialty_id_to_name_mapping": {
+      "count": 4,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 244,
+      "patient_ids": [],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "specialty_id_to_name_mapping"
+        ],
+        "specialty_id_to_name_mapping": {
+          "_type": "object",
+          "_keys": [
+            "077"
+          ]
+        }
+      },
+      "avg_size": 61
+    },
+    "/{id}/65/ax/data?sources=alerted_measures": {
+      "count": 4,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 639692,
+      "patient_ids": [
+        "35212677"
+      ],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "default_clinical_providers",
+          "preferred_clinical_providers",
+          "patient_insurance",
+          "alerted_measures",
+          "provider_option_list",
+          "ccm_enrollment",
+          "contact_persons",
+          "user_relationships",
+          "pdmp_conf",
+          "supervising_provider_option_list",
+          "risk_contract_status",
+          "default_order_route_clinical_providers",
+          "order_groups",
+          "care_team",
+          "coordinator_relationships",
+          "confidential_chart_flag",
+          "care_team_roles",
+          "has_insurance_policy",
+          "default_pharmacy",
+          "pdmp_provider_access"
+        ],
+        "default_clinical_providers": {
+          "_type": "object",
+          "_keys": [
+            "10",
+            "11",
+            "12",
+            "16"
+          ]
+        },
+        "preferred_clinical_providers": {
+          "_type": "object",
+          "_keys": [
+            "10",
+            "11",
+            "12",
+            "16"
+          ]
+        },
+        "patient_insurance": {
+          "_type": "array",
+          "_length": 2,
+          "_items": {
+            "_type": "object",
+            "_keys": [
+              "CancelledDate",
+              "InsuredState",
+              "InsuredIDNumber",
+              "InsuredAddress1",
+              "VersionToken",
+              "Created",
+              "CreatedBy",
+              "InsuredZIP",
+              "InsuredFirstName",
+              "IDNumber",
+              "RelationshipToInsuredID",
+              "InsuredLastName",
+              "CancelledUser",
+              "SequenceNumber",
+              "InsurancePackage",
+              "InsuredCity",
+              "ID",
+              "PatientID",
+              "EligibilityLastCheckedDate",
+              "RelationshipToInsuredName"
+            ],
+            "InsuredIDNumber": {
+              "_truncated": true
+            },
+            "InsuredFirstName": {
+              "_truncated": true
+            },
+            "IDNumber": {
+              "_truncated": true
+            },
+            "RelationshipToInsuredID": {
+              "_truncated": true
+            },
+            "InsuredLastName": {
+              "_truncated": true
+            }
+          }
+        },
+        "provider_option_list": {
+          "_type": "array",
+          "_length": 7,
+          "_items": {
+            "_type": "object",
+            "_keys": [
+              "SpecialtyID",
+              "FirstName",
+              "MiddleName",
+              "LastName",
+              "ProviderType",
+              "UserName",
+              "ID"
+            ],
+            "SpecialtyID": {
+              "_truncated": true
+            },
+            "FirstName": {
+              "_truncated": true
+            },
+            "MiddleName": {
+              "_truncated": true
+            },
+            "LastName": {
+              "_truncated": true
+            },
+            "ProviderType": {
+              "_truncated": true
+            }
+          }
+        },
+        "supervising_provider_option_list": {
+          "_type": "array",
+          "_length": 7,
+          "_items": {
+            "_type": "object",
+            "_keys": [
+              "SpecialtyID",
+              "FirstName",
+              "MiddleName",
+              "LastName",
+              "ProviderType",
+              "UserName",
+              "ID"
+            ],
+            "SpecialtyID": {
+              "_truncated": true
+            },
+            "FirstName": {
+              "_truncated": true
+            },
+            "MiddleName": {
+              "_truncated": true
+            },
+            "LastName": {
+              "_truncated": true
+            },
+            "ProviderType": {
+              "_truncated": true
+            }
+          }
+        }
+      },
+      "avg_size": 159923
+    },
+    "/{id}/65/ax/data?sources=qmaas_enrolled_measures": {
+      "count": 4,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 232,
+      "patient_ids": [
+        "35212677"
+      ],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "qmaas_enrolled_measures",
+          "qmaas_realtime_data"
+        ]
+      },
+      "avg_size": 58
+    },
+    "/{id}/65/ax/data": {
+      "count": 4,
+      "methods": [
+        "POST"
+      ],
+      "total_size": 5232,
+      "patient_ids": [],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "user_preferences"
+        ]
+      },
+      "avg_size": 1308
+    },
+    "/{id}/65/ax/data?sources=future_appointments": {
+      "count": 4,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 609990,
+      "patient_ids": [
+        "35212677"
+      ],
+      "clinical_category": "encounter",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "historical_clinical_encounter_summaries",
+          "initial_historical_clinical_encounter_summaries",
+          "future_appointments",
+          "historical_clinical_encounters",
+          "historical_encounter_attachments",
+          "most_recent_open_encounter",
+          "initial_historical_clinical_encounters"
+        ]
+      },
+      "avg_size": 152497
+    },
+    "/{id}/65/ax/data?sources=p4p_data_no_preload": {
+      "count": 4,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 690551,
+      "patient_ids": [
+        "35212677"
+      ],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "p4p_user",
+          "p4p_patient_settings",
+          "p4p_guidelines",
+          "p4p_dedupe",
+          "p4p_satisfaction",
+          "p4p_qmtab_active_user",
+          "p4p_data_no_preload",
+          "p4p_measure_group",
+          "p4p_results"
+        ],
+        "p4p_patient_settings": {
+          "_type": "object",
+          "_keys": [
+            "ASSOCIATEDPROVIDERS",
+            "DEFAULTPROVIDER"
+          ],
+          "ASSOCIATEDPROVIDERS": {
+            "_type": "array",
+            "_length": 3,
+            "_items": {
+              "_truncated": true
+            }
+          },
+          "DEFAULTPROVIDER": {
+            "_type": "object",
+            "_keys": [
+              "USERNAME",
+              "PROVIDERID"
+            ],
+            "USERNAME": {
+              "_truncated": true
+            },
+            "PROVIDERID": {
+              "_truncated": true
+            }
+          }
+        },
+        "p4p_guidelines": {
+          "_type": "object",
+          "_keys": [
+            "6948",
+            "6950",
+            ""
+          ]
+        }
+      },
+      "avg_size": 172637
+    },
+    "/{id}/65/ax/data?sources=social_history_template_availability": {
+      "count": 4,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 880,
+      "patient_ids": [],
+      "clinical_category": "lab",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "social_history_template_availability"
+        ],
+        "social_history_template_availability": {
+          "_type": "array",
+          "_length": 3,
+          "_items": {
+            "_type": "object",
+            "_keys": [
+              "ID",
+              "NAME"
+            ],
+            "ID": {
+              "_truncated": true
+            },
+            "NAME": {
+              "_truncated": true
+            }
+          }
+        }
+      },
+      "avg_size": 220
+    },
+    "https://providerfriendlyterms.api.athena.io/imo-search-proxy/api/v1/session": {
+      "count": 4,
+      "methods": [
+        "POST"
+      ],
+      "total_size": 212,
+      "patient_ids": [],
+      "clinical_category": "unknown",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "sessionId"
+        ],
+        "sessionId": {
+          "_type": "string",
+          "_length": 36,
+          "_sample": "70a4158c-463a-4efb-a8c3-1acc62ea7fe2"
+        }
+      },
+      "avg_size": 53
+    },
+    "https://patientrisk.api.athena.io/patient-ra-gaps_prode1/api/v1/ragaps/count?...": {
+      "count": 4,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 1040,
+      "patient_ids": [
+        "24547563"
+      ],
+      "clinical_category": "demographic",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "potentialDiagnosisCount",
+          "suspectedDiagnosisCount",
+          "potentialDismissedCount",
+          "suspectedDismissedCount",
+          "closedCount",
+          "riskScore",
+          "hccDemographicFactor",
+          "apccFactor",
+          "hccInteractionFactor",
+          "hccGapScore"
+        ]
+      },
+      "avg_size": 260
+    },
+    "https://providerfriendlyterms.api.athena.io/imo-search-proxy/api/v1/auth?...": {
+      "count": 4,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 20552,
+      "patient_ids": [],
+      "clinical_category": "unknown",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "search_token",
+          "problem_token",
+          "dsm_token",
+          "expiration_ms",
+          "search_endpoint_uri",
+          "diagnosis_endpoint_uri",
+          "procedure_endpoint_uri",
+          "problem_endpoint_uri"
+        ],
+        "problem_token": {
+          "_type": "string",
+          "_length": 822,
+          "_sample": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IlJFVk..."
+        },
+        "problem_endpoint_uri": {
+          "_type": "string",
+          "_length": 56,
+          "_sample": "https://api.imohealth.com/problemlistmanagement/pr..."
+        }
+      },
+      "avg_size": 5138
+    },
+    "https://api.imohealth.com/problemlistmanagement/problems/categorize": {
+      "count": 4,
+      "methods": [
+        "POST"
+      ],
+      "total_size": 32154,
+      "patient_ids": [],
+      "clinical_category": "problem",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "categories"
+        ]
+      },
+      "avg_size": 8038
+    },
+    "/{id}/65/ax/data?sources=patient_has_united_health_group_insurance": {
+      "count": 4,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 192,
+      "patient_ids": [
+        "35212677"
+      ],
+      "clinical_category": "demographic",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "patient_has_united_health_group_insurance"
+        ],
+        "patient_has_united_health_group_insurance": {
+          "_type": "number",
+          "_sample": 0
+        }
+      },
+      "avg_size": 48
+    },
+    "/{id}/65/ax/data?sources=historical_encounter_attachments": {
+      "count": 4,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 3291,
+      "patient_ids": [],
+      "clinical_category": "encounter",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "historical_encounter_attachments"
+        ]
+      },
+      "avg_size": 822
+    },
+    "/{id}/65/ax/data?sources=historical_clinical_encounter_summaries": {
+      "count": 4,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 2603,
+      "patient_ids": [],
+      "clinical_category": "encounter",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "historical_clinical_encounter_summaries"
+        ]
+      },
+      "avg_size": 650
+    },
+    "/{id}/65/ax/encounter/{id}/image_documentation": {
+      "count": 4,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 2206,
+      "patient_ids": [
+        "185396390"
+      ],
+      "clinical_category": "document",
+      "sample_payload_structure": {
+        "_type": "array",
+        "_length": 1,
+        "_items": {
+          "_type": "object",
+          "_keys": [
+            "image_header",
+            "document_class",
+            "image_html",
+            "document_id",
+            "document_subclass"
+          ],
+          "document_id": {
+            "_type": "string",
+            "_length": 10,
+            "_sample": "[REDACTED]"
+          }
+        }
+      },
+      "avg_size": 551
+    },
+    "/{id}/65/ax/data?sources=confidentiality_reason_options": {
+      "count": 3,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 3903,
+      "patient_ids": [],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "confidentiality_reason_options"
+        ],
+        "confidentiality_reason_options": {
+          "_type": "object",
+          "_keys": [
+            "LOCKINGREASONOPTIONS",
+            "UNLOCKINGREASONOPTIONS"
+          ]
+        }
+      },
+      "avg_size": 1301
+    },
+    "/{id}/65/ax/data?sources=reasons_for_resources": {
+      "count": 3,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 87,
+      "patient_ids": [],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "reasons_for_resources"
+        ]
+      },
+      "avg_size": 29
+    },
+    "/{id}/65/ax/data?sources=chart_timeline": {
+      "count": 3,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 865454,
+      "patient_ids": [],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "chart_timeline"
+        ]
+      },
+      "avg_size": 288484
+    },
+    "/{id}/65/ax/data?sources=speechtotext_vendor": {
+      "count": 3,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 1257024,
+      "patient_ids": [],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "dosage_additional_instructions",
+          "vaccine_not_given_reasons",
+          "order_not_done_reasons_by_id",
+          "all_relations",
+          "pregnancy_options",
+          "dosage_frequencies",
+          "cdc_id_to_order_not_done_reason_id_map",
+          "exclusion_reason_options",
+          "horizontal_prism_base_codes",
+          "vaccine_routes",
+          "gcode_to_cdsm_mapping",
+          "cpsw_settings",
+          "states",
+          "cancel_reasons",
+          "hcpcs_modifiers_by_code",
+          "allergy_severities",
+          "confidentiality_reason_options",
+          "diagnosis_attributes",
+          "meds_not_reviewed_options",
+          "hcpcs_modifiers"
+        ],
+        "order_not_done_reasons_by_id": {
+          "_type": "object",
+          "_keys": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "21",
+            "22",
+            "23",
+            "24",
+            "25",
+            "26",
+            "41",
+            "42",
+            "43"
+          ]
+        },
+        "cdc_id_to_order_not_done_reason_id_map": {
+          "_type": "object",
+          "_keys": [
+            "4834000",
+            "6142004",
+            "14168008",
+            "14189004",
+            "16541001",
+            "18624000",
+            "23511006",
+            "27624003",
+            "27836007",
+            "36653000",
+            "36989005",
+            "38907003",
+            "39579001",
+            "40468003",
+            "52947006",
+            "66071002",
+            "76902006",
+            "77386006",
+            "81308009",
+            "91428005"
+          ]
+        },
+        "horizontal_prism_base_codes": {
+          "_type": "array",
+          "_length": 2,
+          "_items": {
+            "_type": "object",
+            "_keys": [
+              "__CLASS__",
+              "Description",
+              "VersionToken",
+              "CodeSet",
+              "Code"
+            ],
+            "CodeSet": {
+              "_truncated": true
+            },
+            "Code": {
+              "_truncated": true
+            }
+          }
+        },
+        "gcode_to_cdsm_mapping": {
+          "_type": "object",
+          "_keys": [
+            "G1005",
+            "G1009",
+            "G1000",
+            "G1003",
+            "G1001",
+            "G1006",
+            "G1007",
+            "G1011",
+            "G1008",
+            "G1004",
+            "G1010",
+            "G1002"
+          ]
+        },
+        "hcpcs_modifiers_by_code": {
+          "_type": "object",
+          "_keys": [
+            "MD",
+            "MA",
+            "MG",
+            "MH",
+            "MF",
+            "ME",
+            "MB",
+            "QQ",
+            "MC"
+          ]
+        }
+      },
+      "avg_size": 419008
+    },
+    "/{id}/65/ax/data?sources=enterprise_id": {
+      "count": 3,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 58116,
+      "patient_ids": [
+        "35212677"
+      ],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "can_dictate",
+          "summary",
+          "amendment_note_data",
+          "diagnoses_orders_note",
+          "enterprise_id",
+          "pt_episodes",
+          "dictations",
+          "provider_review",
+          "transcription_pending_assignee",
+          "exercises",
+          "encounter_has_pending_dictation",
+          "department_info",
+          "cmaas_config"
+        ],
+        "enterprise_id": {
+          "_type": "string",
+          "_length": 8,
+          "_sample": "18889107"
+        },
+        "provider_review": {
+          "_type": "object",
+          "_keys": [
+            "provider_review"
+          ],
+          "provider_review": {
+            "_type": "string",
+            "_length": 0,
+            "_sample": ""
+          }
+        }
+      },
+      "avg_size": 19372
+    },
+    "/{id}/65/ax/data?sources=speechtotext_terms": {
+      "count": 3,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 505469,
+      "patient_ids": [
+        "35212677"
+      ],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "encounter_close_failed",
+          "document_review",
+          "vitals",
+          "ob_episode",
+          "sci_review_data",
+          "vitals_configuration",
+          "available_contacts_and_consents",
+          "attached_summary_of_care_records",
+          "interpretations",
+          "vitals_devices_supported",
+          "interpretation_templates",
+          "suggested_encounter_reasons",
+          "transition_of_care_flag",
+          "appointment_types",
+          "speechtotext_terms",
+          "attachable_summary_of_care_records",
+          "pregnancy_problems",
+          "encounter_results",
+          "active_telehealth_participants",
+          "temporary_vitals"
+        ],
+        "vitals": {
+          "_type": "object",
+          "_keys": [
+            "__CLASS__",
+            "MUCMeta",
+            "VersionToken",
+            "VitalGroups"
+          ],
+          "VitalGroups": {
+            "_type": "array",
+            "_length": 36,
+            "_items": {
+              "_truncated": true
+            }
+          }
+        },
+        "vitals_configuration": {
+          "_type": "object",
+          "_keys": [
+            "VITALS.HEIGHT.REFUSEDREASON",
+            "VITALS.PULSE.TYPE",
+            "VITALS.NECKCIRCUMFERENCE",
+            "VITALS.BIRTHLENGTH",
+            "VITALS.WEIGHT.REFUSED",
+            "VITALS.HEADCIRCUMFERENCE",
+            "VITALS.BMI.PERCENTILE",
+            "VITALS.BLOODPRESSURE.REFUSED",
+            "VITALS.BLOODPRESSURE.SYSTOLIC",
+            "VITALS.VOU",
+            "VITALS.O2SATURATION",
+            "VITALS.BLOODPRESSURE",
+            "VITALS.FATPERCENTAGE",
+            "VITALS.PULSE",
+            "VITALS.BLOODPRESSURE.DIASTOLIC",
+            "VITALS.GRIPSTRENGTHLEFT",
+            "VITALS.VOD",
+            "VITALS.WEIGHT",
+            "VITALS.GRIPSTRENGTHRIGHT",
+            "VITALS.TEMPERATURE"
+          ],
+          "VITALS.HEIGHT.REFUSEDREASON": {
+            "_type": "object",
+            "_keys": [
+              "FORMAT",
+              "REFERENCERANGE",
+              "MEASURETYPE",
+              "SHORTFORMAT",
+              "OPTIONS",
+              "INPUTTYPE",
+              "CLINICALELEMENTNAME",
+              "VALUE",
+              "FORMCLASS",
+              "GESTATIONALYN",
+              "NOTSMALL",
+              "FORMSTYLE",
+              "DESCRIPTION",
+              "ID",
+              "NAME",
+              "DEFAULTUNITS",
+              "PREFIX",
+              "MULTIREADINGFIELD",
+              "ORDERING",
+              "ENCOUNTERSECTION"
+            ],
+            "CLINICALELEMENTNAME": {
+              "_truncated": true
+            },
+            "ID": {
+              "_truncated": true
+            },
+            "NAME": {
+              "_truncated": true
+            }
+          },
+          "VITALS.PULSE.TYPE": {
+            "_type": "object",
+            "_keys": [
+              "FORMAT",
+              "REFERENCERANGE",
+              "MEASURETYPE",
+              "SHORTFORMAT",
+              "OPTIONS",
+              "INPUTTYPE",
+              "CLINICALELEMENTNAME",
+              "VALUE",
+              "FORMCLASS",
+              "GESTATIONALYN",
+              "NOTSMALL",
+              "FORMSTYLE",
+              "DESCRIPTION",
+              "ID",
+              "NAME",
+              "DEFAULTUNITS",
+              "PREFIX",
+              "MULTIREADINGFIELD",
+              "ORDERING",
+              "ENCOUNTERSECTION"
+            ],
+            "CLINICALELEMENTNAME": {
+              "_truncated": true
+            },
+            "ID": {
+              "_truncated": true
+            },
+            "NAME": {
+              "_truncated": true
+            }
+          },
+          "VITALS.NECKCIRCUMFERENCE": {
+            "_type": "object",
+            "_keys": [
+              "DISPLAYUNITS",
+              "STAGE",
+              "FORMAT",
+              "DBUNITS",
+              "REFERENCERANGE",
+              "MEASURETYPE",
+              "SHORTFORMAT",
+              "READONLYFORMAT",
+              "OPTIONS",
+              "INPUTTYPE",
+              "CLINICALELEMENTNAME",
+              "VALUE",
+              "FORMCLASS",
+              "GESTATIONALYN",
+              "NOTSMALL",
+              "FORMSTYLE",
+              "DESCRIPTION",
+              "ID",
+              "DEFAULTUNITS",
+              "NAME"
+            ],
+            "CLINICALELEMENTNAME": {
+              "_truncated": true
+            },
+            "ID": {
+              "_truncated": true
+            },
+            "NAME": {
+              "_truncated": true
+            }
+          },
+          "VITALS.BIRTHLENGTH": {
+            "_type": "object",
+            "_keys": [
+              "DISPLAYUNITS",
+              "STAGE",
+              "FORMAT",
+              "DBUNITS",
+              "REFERENCERANGE",
+              "MEASURETYPE",
+              "SHORTFORMAT",
+              "READONLYFORMAT",
+              "OPTIONS",
+              "INPUTTYPE",
+              "CLINICALELEMENTNAME",
+              "VALUE",
+              "FORMCLASS",
+              "GESTATIONALYN",
+              "NOTSMALL",
+              "FORMSTYLE",
+              "DESCRIPTION",
+              "ID",
+              "DEFAULTUNITS",
+              "NAME"
+            ],
+            "CLINICALELEMENTNAME": {
+              "_truncated": true
+            },
+            "ID": {
+              "_truncated": true
+            },
+            "NAME": {
+              "_truncated": true
+            }
+          },
+          "VITALS.WEIGHT.REFUSED": {
+            "_type": "object",
+            "_keys": [
+              "FORMAT",
+              "REFERENCERANGE",
+              "MEASURETYPE",
+              "SHORTFORMAT",
+              "OPTIONS",
+              "INPUTTYPE",
+              "CLINICALELEMENTNAME",
+              "VALUE",
+              "FORMCLASS",
+              "GESTATIONALYN",
+              "NOTSMALL",
+              "FORMSTYLE",
+              "DESCRIPTION",
+              "ID",
+              "NAME",
+              "DEFAULTUNITS",
+              "PREFIX",
+              "MULTIREADINGFIELD",
+              "ORDERING",
+              "ENCOUNTERSECTION"
+            ],
+            "CLINICALELEMENTNAME": {
+              "_truncated": true
+            },
+            "ID": {
+              "_truncated": true
+            },
+            "NAME": {
+              "_truncated": true
+            }
+          }
+        },
+        "available_contacts_and_consents": {
+          "_type": "object",
+          "_keys": [
+            "DONOTCALLYN",
+            "FIRSTNAME",
+            "THIRDPARTYUSER",
+            "CONTACTREASON",
+            "LASTNAME",
+            "PATIENTID",
+            "CONTACTS"
+          ],
+          "FIRSTNAME": {
+            "_type": "string",
+            "_length": 4,
+            "_sample": "JOHN"
+          },
+          "LASTNAME": {
+            "_type": "string",
+            "_length": 8,
+            "_sample": "FINNICUM"
+          },
+          "PATIENTID": {
+            "_type": "string",
+            "_length": 8,
+            "_sample": "18889107"
+          }
+        },
+        "vitals_devices_supported": {
+          "_type": "array",
+          "_length": 2,
+          "_items": {
+            "_type": "string",
+            "_length": 16,
+            "_sample": "WelchAllynVitals"
+          }
+        },
+        "pregnancy_problems": {
+          "_type": "object",
+          "_keys": [
+            "PregnancyNotes",
+            "__CLASS__",
+            "Problems",
+            "VersionToken"
+          ],
+          "Problems": {
+            "_type": "array",
+            "_length": 0,
+            "_items": null
+          }
+        }
+      },
+      "avg_size": 168489
+    },
+    "/{id}/65/ax/data?sources=historical_problems": {
+      "count": 3,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 1462,
+      "patient_ids": [
+        "35212677"
+      ],
+      "clinical_category": "problem",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "historical_problems"
+        ],
+        "historical_problems": {
+          "_type": "object",
+          "_keys": [
+            "PregnancyNotes",
+            "__CLASS__",
+            "FilteredCount",
+            "Problems",
+            "MUCMeta",
+            "VersionToken"
+          ],
+          "Problems": {
+            "_type": "array",
+            "_length": 0,
+            "_items": null
+          }
+        }
+      },
+      "avg_size": 487
+    },
+    "/{id}/65/ax/data?sources=import_alerts": {
+      "count": 3,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 69,
+      "patient_ids": [
+        "35212677"
+      ],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "import_alerts"
+        ]
+      },
+      "avg_size": 23
+    },
+    "/{id}/65/ax/data?sources=letter_groups": {
+      "count": 3,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 4020565,
+      "patient_ids": [
+        "35212677"
+      ],
+      "clinical_category": "document",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "letter_groups"
+        ]
+      },
+      "avg_size": 1340188
+    },
+    "/{id}/65/ax/data?sources=measurements": {
+      "count": 3,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 21903,
+      "patient_ids": [
+        "35212677"
+      ],
+      "clinical_category": "vital",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "measurements"
+        ]
+      },
+      "avg_size": 7301
+    },
+    "/{id}/65/ax/data?sources=parsed_summary": {
+      "count": 3,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 72,
+      "patient_ids": [
+        "35212677"
+      ],
+      "clinical_category": "document",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "parsed_summary"
+        ]
+      },
+      "avg_size": 24
+    },
+    "/{id}/65/ax/data?sources=telehealth_patient_online_status_by_appointment_id": {
+      "count": 3,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 174,
+      "patient_ids": [
+        "35212677"
+      ],
+      "clinical_category": "demographic",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "telehealth_patient_online_status_by_appointment_id"
+        ],
+        "telehealth_patient_online_status_by_appointment_id": {
+          "_type": "object",
+          "_keys": []
+        }
+      },
+      "avg_size": 58
+    },
+    "/{id}/65/ax/data?sources=user_signoff_permission_level": {
+      "count": 3,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 339337,
+      "patient_ids": [
+        "35212677"
+      ],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "order_set_diagnosis_imo_code_map",
+          "default_clinical_providers",
+          "network_scheduling_contexts",
+          "encounter_total_time_spent",
+          "encounter_security_labels",
+          "preferred_clinical_providers",
+          "patient_has_medicare_part_b",
+          "icd_data_by_icd10_code",
+          "cot_to_ndc_options_map",
+          "sex_gender_profile",
+          "icd_codes",
+          "specimen_sources",
+          "point_of_care_tests",
+          "max_unstructured_sig_length",
+          "prescription_quantity_unit_data",
+          "order_sets",
+          "order_cpt_code_descriptions",
+          "discussion_note_topics",
+          "max_pharmacy_note_length",
+          "imo_search_proxy_conf"
+        ],
+        "order_set_diagnosis_imo_code_map": {
+          "_type": "object",
+          "_keys": [
+            "115808",
+            "116326",
+            "117055",
+            "120899",
+            "121185",
+            "121801"
+          ]
+        },
+        "default_clinical_providers": {
+          "_type": "object",
+          "_keys": [
+            "10",
+            "11",
+            "12",
+            "16"
+          ]
+        },
+        "encounter_security_labels": {
+          "_type": "object",
+          "_keys": []
+        },
+        "preferred_clinical_providers": {
+          "_type": "object",
+          "_keys": [
+            "10",
+            "11",
+            "12",
+            "16"
+          ]
+        },
+        "patient_has_medicare_part_b": {
+          "_type": "number",
+          "_sample": 0
+        }
+      },
+      "avg_size": 113112
+    },
+    "/{id}/65/ax/data?sources=billing_tab_em_coder_state": {
+      "count": 3,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 70988,
+      "patient_ids": [
+        "35212677"
+      ],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "billing_tab_version",
+          "vaccine_manufacturers",
+          "vaccine_groups",
+          "encounter_attachments",
+          "wc_saved_finding_sets",
+          "wc_most_used_saved_finding_sets",
+          "pe_saved_finding_sets",
+          "historical_exam_template_encounter_hashes",
+          "ros_most_used_saved_finding_sets",
+          "current_user_provider",
+          "hpi_most_used_saved_finding_sets",
+          "contact_persons",
+          "pe_most_used_saved_finding_sets",
+          "user_relationships",
+          "pdmp_conf",
+          "cmaas_enabled_for_encounter",
+          "vaccine_addendum",
+          "risk_contract_status",
+          "billing_tab_properties",
+          "order_groups"
+        ],
+        "current_user_provider": {
+          "_type": "object",
+          "_keys": [
+            "ProviderGroupID",
+            "SchedulingName",
+            "MiddleName",
+            "LastName",
+            "VersionToken",
+            "TaxonomyCode",
+            "HideInPortalYN",
+            "DisplayName",
+            "ProviderTypeCategory",
+            "ProviderType",
+            "PhoneNumber",
+            "BilledName",
+            "Suffix",
+            "NPI",
+            "TaxonomyNameLevel3",
+            "Specialty",
+            "ProviderTypeDisplayName",
+            "Sex",
+            "Address1",
+            "SpecialtyID"
+          ],
+          "ProviderGroupID": {
+            "_type": "string",
+            "_length": 4,
+            "_sample": "3999"
+          },
+          "SchedulingName": {
+            "_type": "string",
+            "_length": 19,
+            "_sample": "GA_AVSC_MorganIII_J"
+          },
+          "MiddleName": {
+            "_type": "string",
+            "_length": 6,
+            "_sample": "Harris"
+          },
+          "LastName": {
+            "_type": "string",
+            "_length": 10,
+            "_sample": "Morgan III"
+          },
+          "TaxonomyCode": {
+            "_type": "string",
+            "_length": 10,
+            "_sample": "2086S0129X"
+          }
+        },
+        "confidential_chart_flag": {
+          "_type": "array",
+          "_length": 1,
+          "_items": {
+            "_type": "object",
+            "_keys": [
+              "Note",
+              "__CLASS__",
+              "Confidential",
+              "VersionToken"
+            ],
+            "Confidential": {
+              "_truncated": true
+            }
+          }
+        },
+        "billing_tab_em_coder_state": {
+          "_type": "object",
+          "_keys": [
+            "em_coder_state"
+          ],
+          "em_coder_state": {
+            "_type": "object",
+            "_keys": [
+              "BUTTONHOVERTEXT",
+              "BUTTONDISABLED",
+              "SHOWEMCODER"
+            ],
+            "SHOWEMCODER": {
+              "_truncated": true
+            }
+          }
+        },
+        "pdmp_provider_access": {
+          "_type": "object",
+          "_keys": []
+        }
+      },
+      "avg_size": 23662
+    },
+    "/{id}/65/ax/data?sources=has_cancer_cases_container": {
+      "count": 3,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 384,
+      "patient_ids": [
+        "35212677"
+      ],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "has_cancer_cases_container"
+        ]
+      },
+      "avg_size": 128
+    },
+    "/{id}/65/ax/data?sources=has_cancer_cases": {
+      "count": 3,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 135,
+      "patient_ids": [
+        "35212677"
+      ],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "has_cancer_cases"
+        ]
+      },
+      "avg_size": 45
+    },
+    "/{id}/65/ax/data?sources=external_document_links": {
+      "count": 3,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 192234,
+      "patient_ids": [
+        "35212677"
+      ],
+      "clinical_category": "document",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "external_document_links",
+          "initial_chart_referenced_results",
+          "historical_documents",
+          "initial_chart_clinical_results"
+        ]
+      },
+      "avg_size": 64078
+    },
+    "/{id}/65/ax/data?sources=family_history_by_problem": {
+      "count": 3,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 3128004,
+      "patient_ids": [
+        "35212677"
+      ],
+      "clinical_category": "problem",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "procedure_default_list",
+          "stage_procedure_vitals",
+          "procedure_medication_totals",
+          "coumadin_concept_medication_ids",
+          "family_history_default_list",
+          "gpal_history",
+          "clinical_paper_forms",
+          "medication_warnings",
+          "social_history",
+          "configured_procedure_medications_intra",
+          "gender_and_sexual_identity_questions",
+          "blank_paper_forms",
+          "past_medical_history",
+          "text_macros",
+          "social_history_template_availability",
+          "family_history_by_problem",
+          "gyn_toggle_state",
+          "baseline_procedure_vitals",
+          "social_history_declined_reason_options",
+          "procedure_medication_oxygen_delivery_method"
+        ],
+        "stage_procedure_vitals": {
+          "_type": "object",
+          "_keys": [
+            "__CLASS__",
+            "MUCMeta",
+            "VersionToken",
+            "VitalGroups"
+          ],
+          "VitalGroups": {
+            "_type": "array",
+            "_length": 2,
+            "_items": {
+              "_truncated": true
+            }
+          }
+        },
+        "procedure_medication_totals": {
+          "_type": "array",
+          "_length": 0,
+          "_items": null
+        },
+        "coumadin_concept_medication_ids": {
+          "_type": "object",
+          "_keys": [
+            "generic_medids",
+            "med_ids"
+          ],
+          "generic_medids": {
+            "_type": "array",
+            "_length": 9,
+            "_items": {
+              "_truncated": true
+            }
+          },
+          "med_ids": {
+            "_type": "array",
+            "_length": 43,
+            "_items": {
+              "_truncated": true
+            }
+          }
+        },
+        "medication_warnings": {
+          "_type": "array",
+          "_length": 13,
+          "_items": {
+            "_type": "object",
+            "_keys": [
+              "FDBID",
+              "FDBGenericID",
+              "VersionToken",
+              "FDBIDType",
+              "Warnings",
+              "__CLASS__"
+            ],
+            "FDBID": {
+              "_truncated": true
+            },
+            "FDBGenericID": {
+              "_truncated": true
+            },
+            "FDBIDType": {
+              "_truncated": true
+            }
+          }
+        },
+        "configured_procedure_medications_intra": {
+          "_type": "object",
+          "_keys": [
+            "ProcedureMedications",
+            "__CLASS__",
+            "MUCMeta",
+            "VersionToken"
+          ],
+          "ProcedureMedications": {
+            "_type": "array",
+            "_length": 0,
+            "_items": null
+          }
+        }
+      },
+      "avg_size": 1042668
+    },
+    "/{id}/65/ax/data?sources=pre_procedure_documentation": {
+      "count": 3,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 537,
+      "patient_ids": [
+        "35212677"
+      ],
+      "clinical_category": "procedure",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "pre_procedure_documentation"
+        ]
+      },
+      "avg_size": 179
+    },
+    "/{id}/65/ax/data?sources=pre_sedation_assessment": {
+      "count": 3,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 1200,
+      "patient_ids": [
+        "35212677"
+      ],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "pre_sedation_assessment"
+        ]
+      },
+      "avg_size": 400
+    },
+    "/{id}/65/ax/encounter/is_physician_op_notes_enabled_for_asc_encounters": {
+      "count": 3,
+      "methods": [
+        "POST"
+      ],
+      "total_size": 0,
+      "patient_ids": [],
+      "clinical_category": "document",
+      "sample_payload_structure": null,
+      "avg_size": 0
+    },
+    "/{id}/65/ax/data?sources=appointment": {
+      "count": 3,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 15202,
+      "patient_ids": [],
+      "clinical_category": "encounter",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "appointment"
+        ]
+      },
+      "avg_size": 5067
+    },
+    "/{id}/65/ax/data?sources=episodes_by_type": {
+      "count": 3,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 72,
+      "patient_ids": [],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "episodes_by_type"
+        ]
+      },
+      "avg_size": 24
+    },
+    "/{id}/65/ax/data?sources=valid_screening_questionnaire_templates_entity": {
+      "count": 3,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 27510,
+      "patient_ids": [
+        "35212677"
+      ],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "valid_screening_questionnaire_templates_entity"
+        ],
+        "valid_screening_questionnaire_templates_entity": {
+          "_type": "object",
+          "_keys": [
+            "__CLASS__",
+            "Templates",
+            "VersionToken"
+          ]
+        }
+      },
+      "avg_size": 9170
+    },
+    "/{id}/65/ax/data?sources=declined_reason_options": {
+      "count": 3,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 642,
+      "patient_ids": [
+        "35212677"
+      ],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "declined_reason_options"
+        ]
+      },
+      "avg_size": 214
+    },
+    "/{id}/65/ax/data?sources=patient_statuses_and_locations": {
+      "count": 3,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 15842,
+      "patient_ids": [
+        "35212677"
+      ],
+      "clinical_category": "demographic",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "patient_statuses_and_locations"
+        ],
+        "patient_statuses_and_locations": {
+          "_type": "object",
+          "_keys": [
+            "statuses",
+            "locations"
+          ]
+        }
+      },
+      "avg_size": 5280
+    },
+    "/{id}/65/ax/encounter/generate_summary?...": {
+      "count": 3,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 1453,
+      "patient_ids": [],
+      "clinical_category": "document",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "snippet_sections",
+          "other_sections",
+          "summaries",
+          "summary_sections"
+        ]
+      },
+      "avg_size": 484
+    },
+    "/{id}/65/ax/data?sources=encounter_section_signoffs": {
+      "count": 3,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 102,
+      "patient_ids": [],
+      "clinical_category": "encounter",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "encounter_section_signoffs"
+        ]
+      },
+      "avg_size": 34
+    },
+    "/{id}/65/ax/data?sources=hcc_model_config": {
+      "count": 3,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 426,
+      "patient_ids": [
+        "35212677"
+      ],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "hcc_model_config"
+        ]
+      },
+      "avg_size": 142
+    },
+    "/{id}/65/ax/data?sources=cds_raw_encounter_sessions": {
+      "count": 3,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 540,
+      "patient_ids": [
+        "35212677"
+      ],
+      "clinical_category": "encounter",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "cds_raw_encounter_sessions"
+        ]
+      },
+      "avg_size": 180
+    },
+    "/{id}/65/ax/data?sources=suspected_hcc_diagnoses": {
+      "count": 3,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 93,
+      "patient_ids": [
+        "35212677"
+      ],
+      "clinical_category": "problem",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "suspected_hcc_diagnoses"
+        ]
+      },
+      "avg_size": 31
+    },
+    "/{id}/65/ax/data?sources=transcriptions_status": {
+      "count": 3,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 87,
+      "patient_ids": [
+        "35212677"
+      ],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "transcriptions_status"
+        ]
+      },
+      "avg_size": 29
+    },
+    "/{id}/65/ax/data?sources=exercises": {
+      "count": 3,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 669,
+      "patient_ids": [],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "exercises"
+        ]
+      },
+      "avg_size": 223
+    },
+    "/{id}/65/ax/data?sources=encounter_claim_is_created": {
+      "count": 3,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 99,
+      "patient_ids": [
+        "35212677"
+      ],
+      "clinical_category": "encounter",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "encounter_claim_is_created"
+        ]
+      },
+      "avg_size": 33
+    },
+    "/{id}/65/ax/data?sources=ccm_enrollment": {
+      "count": 3,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 72,
+      "patient_ids": [
+        "35212677"
+      ],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "ccm_enrollment"
+        ]
+      },
+      "avg_size": 24
+    },
+    "/{id}/65/ax/data?sources=file_links": {
+      "count": 3,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 492,
+      "patient_ids": [],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "file_links"
+        ]
+      },
+      "avg_size": 164
+    },
+    "/{id}/65/ax/data?sources=linkable_screener_documents": {
+      "count": 3,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 489,
+      "patient_ids": [
+        "35212677"
+      ],
+      "clinical_category": "document",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "linkable_screener_documents"
+        ]
+      },
+      "avg_size": 163
+    },
+    "/{id}/65/ax/data?sources=security_labels_by_resource_identifiers_and_types": {
+      "count": 3,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 171,
+      "patient_ids": [],
+      "clinical_category": "lab",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "security_labels_by_resource_identifiers_and_types"
+        ],
+        "security_labels_by_resource_identifiers_and_types": {
+          "_type": "object",
+          "_keys": []
+        }
+      },
+      "avg_size": 57
+    },
+    "https://identity.athenahealth.com/api/v1/sessions/me": {
+      "count": 2,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 1514,
+      "patient_ids": [],
+      "clinical_category": "unknown",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "id",
+          "userId",
+          "login",
+          "createdAt",
+          "expiresAt",
+          "status",
+          "lastPasswordVerification",
+          "lastFactorVerification",
+          "amr",
+          "mfaActive",
+          "_links"
+        ],
+        "id": {
+          "_type": "string",
+          "_length": 25,
+          "_sample": "idxn_hKN9taR3CA-AfO99-kaw"
+        },
+        "userId": {
+          "_type": "string",
+          "_length": 20,
+          "_sample": "00u2h4kjzzO4Kb5o7297"
+        }
+      },
+      "avg_size": 757
+    },
+    "/{id}/65/ax/data?sources=clinical_encounter": {
+      "count": 2,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 23202,
+      "patient_ids": [],
+      "clinical_category": "encounter",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "appointment_ticklers",
+          "simple_future_appointments",
+          "future_encounters",
+          "last_visit_summary",
+          "clinical_encounter",
+          "historical_clinical_encounter_hashes",
+          "last_closed_encounter_date"
+        ]
+      },
+      "avg_size": 11601
+    },
+    "/{id}/65/ax/data?sources=orders": {
+      "count": 2,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 32,
+      "patient_ids": [],
+      "clinical_category": "procedure",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "orders"
+        ]
+      },
+      "avg_size": 16
+    },
+    "/{id}/65/ax/data?sources=imo_search_proxy_conf": {
+      "count": 2,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 230,
+      "patient_ids": [],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "imo_search_proxy_conf"
+        ]
+      },
+      "avg_size": 115
+    },
+    "/{id}/65/ax/data?sources=order_summaries_by_encounter": {
+      "count": 2,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 104771,
+      "patient_ids": [],
+      "clinical_category": "procedure",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "order_summaries_by_encounter"
+        ]
+      },
+      "avg_size": 52385
+    },
+    "/{id}/65/ax/data?sources=implant_history": {
+      "count": 2,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 46,
+      "patient_ids": [
+        "35212677"
+      ],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "implant_history"
+        ]
+      },
+      "avg_size": 23
+    },
+    "/{id}/65/ax/data?sources=referral_attachments": {
+      "count": 2,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 39953,
+      "patient_ids": [],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "referral_attachments"
+        ]
+      },
+      "avg_size": 19976
+    },
+    "/{id}/65/ax/data?sources=auth_task_status_for_order": {
+      "count": 2,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 68,
+      "patient_ids": [],
+      "clinical_category": "procedure",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "auth_task_status_for_order"
+        ]
+      },
+      "avg_size": 34
+    },
+    "/{id}/65/ax/data?sources=auth_task_show_react_widget": {
+      "count": 2,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 68,
+      "patient_ids": [],
+      "clinical_category": "imaging",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "auth_task_show_react_widget"
+        ],
+        "auth_task_show_react_widget": {
+          "_type": "number",
+          "_sample": 0
+        }
+      },
+      "avg_size": 34
+    },
+    "/{id}/65/ax/data?sources=has_security_labels": {
+      "count": 2,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 102,
+      "patient_ids": [],
+      "clinical_category": "lab",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "has_security_labels"
+        ],
+        "has_security_labels": {
+          "_type": "object",
+          "_keys": [
+            "has_security_labels"
+          ],
+          "has_security_labels": {
+            "_type": "number",
+            "_sample": 0
+          }
+        }
+      },
+      "avg_size": 51
+    },
+    "/{id}/65/ax/data?sources=network_documents": {
+      "count": 2,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 1578372,
+      "patient_ids": [],
+      "clinical_category": "document",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "network_documents"
+        ]
+      },
+      "avg_size": 789186
+    },
+    "https://hospitalclinicalnano.api.athena.io/clinicals-external-data/api/v1/externaldata/provenance/AllergyIntolerance/{id}/{id}": {
+      "count": 2,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 0,
+      "patient_ids": [],
+      "clinical_category": "allergy",
+      "sample_payload_structure": null,
+      "avg_size": 0
+    },
+    "/{id}/65/ax/data?sources=clinical_results_by_order_type": {
+      "count": 2,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 8552,
+      "patient_ids": [],
+      "clinical_category": "lab",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "clinical_results_by_order_type"
+        ]
+      },
+      "avg_size": 4276
+    },
+    "/{id}/65/ax/data?sources=result_documents_by_order_type": {
+      "count": 2,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 13072,
+      "patient_ids": [],
+      "clinical_category": "lab",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "result_documents_by_order_type"
+        ]
+      },
+      "avg_size": 6536
+    },
+    "/{id}/65/ax/data?sources=mdp_partners_user_lookup": {
+      "count": 1,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 565806,
+      "patient_ids": [],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "mdp_partners_user_lookup"
+        ]
+      },
+      "avg_size": 565806
+    },
+    "/{id}/65/ax/data?sources=medication_warnings": {
+      "count": 1,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 69454,
+      "patient_ids": [],
+      "clinical_category": "medication",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "medication_warnings"
+        ],
+        "medication_warnings": {
+          "_type": "array",
+          "_length": 12,
+          "_items": {
+            "_type": "object",
+            "_keys": [
+              "FDBID",
+              "FDBGenericID",
+              "VersionToken",
+              "FDBIDType",
+              "Warnings",
+              "__CLASS__"
+            ],
+            "FDBID": {
+              "_truncated": true
+            },
+            "FDBGenericID": {
+              "_truncated": true
+            },
+            "FDBIDType": {
+              "_truncated": true
+            }
+          }
+        }
+      },
+      "avg_size": 69454
+    },
+    "/{id}/65/ax/data?sources=alarm_days_options": {
+      "count": 1,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 657707,
+      "patient_ids": [],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "dosage_additional_instructions",
+          "vaccine_not_given_reasons",
+          "all_relations",
+          "dosage_frequencies",
+          "pregnancy_options",
+          "place_of_service_options",
+          "departments",
+          "vaccine_routes",
+          "states",
+          "confidentiality_reason_options",
+          "allergy_severities",
+          "alarm_days_options",
+          "administer_sites",
+          "universal_text_area_conf",
+          "created_macros",
+          "clinical_order_type_groups",
+          "speechtotext_vendor",
+          "implant_options",
+          "medication_stop_reasons",
+          "allergy_reactions"
+        ],
+        "confidentiality_reason_options": {
+          "_type": "object",
+          "_keys": [
+            "LOCKINGREASONOPTIONS",
+            "UNLOCKINGREASONOPTIONS"
+          ]
+        },
+        "allergy_severities": {
+          "_type": "array",
+          "_length": 6,
+          "_items": {
+            "_type": "object",
+            "_keys": [
+              "__CLASS__",
+              "Description",
+              "VersionToken",
+              "CodeSet",
+              "Code"
+            ],
+            "CodeSet": {
+              "_truncated": true
+            },
+            "Code": {
+              "_truncated": true
+            }
+          }
+        },
+        "medication_stop_reasons": {
+          "_type": "array",
+          "_length": 12,
+          "_items": {
+            "_type": "object",
+            "_keys": [
+              "ID",
+              "NAME"
+            ],
+            "ID": {
+              "_truncated": true
+            },
+            "NAME": {
+              "_truncated": true
+            }
+          }
+        },
+        "allergy_reactions": {
+          "_type": "object",
+          "_keys": [
+            "bradycardia",
+            "swelling",
+            "dry mouth",
+            "tachycardia",
+            "respiratory distress",
+            "nausea",
+            "eye redness",
+            "hives",
+            "eye swelling",
+            "numbness/tingling/paresthesia",
+            "stevens-johnson syndrome",
+            "irregular heart rate",
+            "encephalitis",
+            "confusion",
+            "rash",
+            "decreased blood pressure",
+            "muscle cramps",
+            "arthralgia (joint pain)",
+            "anaphylaxis",
+            "itching"
+          ],
+          "suicidal thoughts": {
+            "_type": "string",
+            "_length": 3,
+            "_sample": "373"
+          }
+        }
+      },
+      "avg_size": 657707
+    },
+    "/{id}/65/ax/data?sources=appointment_types": {
+      "count": 1,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 1126748,
+      "patient_ids": [],
+      "clinical_category": "encounter",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "provider_specialty_user_preference",
+          "measurements",
+          "vitals",
+          "speechtotext_terms",
+          "text_macros",
+          "vitals_configuration",
+          "temporary_vitals",
+          "vitals_unit_conversion_enabled",
+          "vitals_devices_supported",
+          "measurement_unit_options",
+          "appointment_types"
+        ],
+        "provider_specialty_user_preference": {
+          "_type": "array",
+          "_length": 0,
+          "_items": null
+        },
+        "vitals": {
+          "_type": "object",
+          "_keys": [
+            "__CLASS__",
+            "MUCMeta",
+            "VersionToken",
+            "VitalGroups"
+          ],
+          "VitalGroups": {
+            "_type": "array",
+            "_length": 36,
+            "_items": {
+              "_truncated": true
+            }
+          }
+        },
+        "vitals_configuration": {
+          "_type": "object",
+          "_keys": [
+            "VITALS.HEIGHT.REFUSEDREASON",
+            "VITALS.PULSE.TYPE",
+            "VITALS.NECKCIRCUMFERENCE",
+            "VITALS.BIRTHLENGTH",
+            "VITALS.WEIGHT.REFUSED",
+            "VITALS.HEADCIRCUMFERENCE",
+            "VITALS.BMI.PERCENTILE",
+            "VITALS.BLOODPRESSURE.REFUSED",
+            "VITALS.BLOODPRESSURE.SYSTOLIC",
+            "VITALS.VOU",
+            "VITALS.O2SATURATION",
+            "VITALS.BLOODPRESSURE",
+            "VITALS.FATPERCENTAGE",
+            "VITALS.PULSE",
+            "VITALS.BLOODPRESSURE.DIASTOLIC",
+            "VITALS.GRIPSTRENGTHLEFT",
+            "VITALS.VOD",
+            "VITALS.WEIGHT",
+            "VITALS.GRIPSTRENGTHRIGHT",
+            "VITALS.TEMPERATURE"
+          ],
+          "VITALS.HEIGHT.REFUSEDREASON": {
+            "_type": "object",
+            "_keys": [
+              "FORMAT",
+              "REFERENCERANGE",
+              "MEASURETYPE",
+              "SHORTFORMAT",
+              "OPTIONS",
+              "INPUTTYPE",
+              "CLINICALELEMENTNAME",
+              "VALUE",
+              "FORMCLASS",
+              "GESTATIONALYN",
+              "NOTSMALL",
+              "FORMSTYLE",
+              "DESCRIPTION",
+              "ID",
+              "NAME",
+              "DEFAULTUNITS",
+              "PREFIX",
+              "MULTIREADINGFIELD",
+              "ORDERING",
+              "ENCOUNTERSECTION"
+            ],
+            "CLINICALELEMENTNAME": {
+              "_truncated": true
+            },
+            "ID": {
+              "_truncated": true
+            },
+            "NAME": {
+              "_truncated": true
+            }
+          },
+          "VITALS.PULSE.TYPE": {
+            "_type": "object",
+            "_keys": [
+              "FORMAT",
+              "REFERENCERANGE",
+              "MEASURETYPE",
+              "SHORTFORMAT",
+              "OPTIONS",
+              "INPUTTYPE",
+              "CLINICALELEMENTNAME",
+              "VALUE",
+              "FORMCLASS",
+              "GESTATIONALYN",
+              "NOTSMALL",
+              "FORMSTYLE",
+              "DESCRIPTION",
+              "ID",
+              "NAME",
+              "DEFAULTUNITS",
+              "PREFIX",
+              "MULTIREADINGFIELD",
+              "ORDERING",
+              "ENCOUNTERSECTION"
+            ],
+            "CLINICALELEMENTNAME": {
+              "_truncated": true
+            },
+            "ID": {
+              "_truncated": true
+            },
+            "NAME": {
+              "_truncated": true
+            }
+          },
+          "VITALS.NECKCIRCUMFERENCE": {
+            "_type": "object",
+            "_keys": [
+              "DISPLAYUNITS",
+              "STAGE",
+              "FORMAT",
+              "DBUNITS",
+              "REFERENCERANGE",
+              "MEASURETYPE",
+              "SHORTFORMAT",
+              "READONLYFORMAT",
+              "OPTIONS",
+              "INPUTTYPE",
+              "CLINICALELEMENTNAME",
+              "VALUE",
+              "FORMCLASS",
+              "GESTATIONALYN",
+              "NOTSMALL",
+              "FORMSTYLE",
+              "DESCRIPTION",
+              "ID",
+              "DEFAULTUNITS",
+              "NAME"
+            ],
+            "CLINICALELEMENTNAME": {
+              "_truncated": true
+            },
+            "ID": {
+              "_truncated": true
+            },
+            "NAME": {
+              "_truncated": true
+            }
+          },
+          "VITALS.BIRTHLENGTH": {
+            "_type": "object",
+            "_keys": [
+              "DISPLAYUNITS",
+              "STAGE",
+              "FORMAT",
+              "DBUNITS",
+              "REFERENCERANGE",
+              "MEASURETYPE",
+              "SHORTFORMAT",
+              "READONLYFORMAT",
+              "OPTIONS",
+              "INPUTTYPE",
+              "CLINICALELEMENTNAME",
+              "VALUE",
+              "FORMCLASS",
+              "GESTATIONALYN",
+              "NOTSMALL",
+              "FORMSTYLE",
+              "DESCRIPTION",
+              "ID",
+              "DEFAULTUNITS",
+              "NAME"
+            ],
+            "CLINICALELEMENTNAME": {
+              "_truncated": true
+            },
+            "ID": {
+              "_truncated": true
+            },
+            "NAME": {
+              "_truncated": true
+            }
+          },
+          "VITALS.WEIGHT.REFUSED": {
+            "_type": "object",
+            "_keys": [
+              "FORMAT",
+              "REFERENCERANGE",
+              "MEASURETYPE",
+              "SHORTFORMAT",
+              "OPTIONS",
+              "INPUTTYPE",
+              "CLINICALELEMENTNAME",
+              "VALUE",
+              "FORMCLASS",
+              "GESTATIONALYN",
+              "NOTSMALL",
+              "FORMSTYLE",
+              "DESCRIPTION",
+              "ID",
+              "NAME",
+              "DEFAULTUNITS",
+              "PREFIX",
+              "MULTIREADINGFIELD",
+              "ORDERING",
+              "ENCOUNTERSECTION"
+            ],
+            "CLINICALELEMENTNAME": {
+              "_truncated": true
+            },
+            "ID": {
+              "_truncated": true
+            },
+            "NAME": {
+              "_truncated": true
+            }
+          }
+        },
+        "temporary_vitals": {
+          "_type": "object",
+          "_keys": [
+            "__CLASS__",
+            "MUCMeta",
+            "VersionToken",
+            "VitalGroups"
+          ],
+          "VitalGroups": {
+            "_type": "array",
+            "_length": 36,
+            "_items": {
+              "_truncated": true
+            }
+          }
+        },
+        "vitals_unit_conversion_enabled": {
+          "_type": "number",
+          "_sample": 0
+        }
+      },
+      "avg_size": 1126748
+    },
+    "/{id}/65/ax/data?sources=problem_insights_proxy_conf": {
+      "count": 1,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 173,
+      "patient_ids": [],
+      "clinical_category": "problem",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "problem_insights_proxy_conf"
+        ],
+        "problem_insights_proxy_conf": {
+          "_type": "object",
+          "_keys": [
+            "problem_insights_proxy_url"
+          ],
+          "problem_insights_proxy_url": {
+            "_type": "string",
+            "_length": 106,
+            "_sample": "https://hospitalclinicalnano.api.athena.io/clinica..."
+          }
+        }
+      },
+      "avg_size": 173
+    },
+    "/{id}/65/ax/data?sources=vaccine_addendum": {
+      "count": 1,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 68504,
+      "patient_ids": [],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "current_encounter_layout",
+          "procedure_default_list",
+          "historical_orders",
+          "patient_cases",
+          "vaccine_addendum",
+          "clinical_paper_forms",
+          "vaccine_groups",
+          "vaccine_manufacturers",
+          "blank_paper_forms",
+          "department_info",
+          "provider_id",
+          "current_user_provider",
+          "vaccines_entity",
+          "procedure"
+        ],
+        "patient_cases": {
+          "_type": "array",
+          "_length": 1,
+          "_items": {
+            "_type": "object",
+            "_keys": [
+              "ClinicalProviderID",
+              "ChartDisplayDate",
+              "SubClass",
+              "VersionToken",
+              "DisplayName",
+              "DepartmentID",
+              "SourceName",
+              "Priority",
+              "PatientDOB",
+              "Status",
+              "Class",
+              "Specialty",
+              "LastModifiedDate",
+              "ParentOrderDocumentID",
+              "SpecialtyID",
+              "PatientGuarantorPhone",
+              "ClassDescription",
+              "PayloadType",
+              "CreatedDate",
+              "AlarmDays"
+            ],
+            "ClinicalProviderID": {
+              "_truncated": true
+            },
+            "DisplayName": {
+              "_truncated": true
+            },
+            "DepartmentID": {
+              "_truncated": true
+            },
+            "SourceName": {
+              "_truncated": true
+            },
+            "PatientDOB": {
+              "_truncated": true
+            }
+          }
+        },
+        "provider_id": {
+          "_type": "string",
+          "_length": 4,
+          "_sample": "6948"
+        },
+        "current_user_provider": {
+          "_type": "object",
+          "_keys": [
+            "ProviderGroupID",
+            "SchedulingName",
+            "LastName",
+            "MiddleName",
+            "VersionToken",
+            "HideInPortalYN",
+            "TaxonomyCode",
+            "DisplayName",
+            "ProviderTypeCategory",
+            "ProviderType",
+            "BilledName",
+            "Suffix",
+            "NPI",
+            "TaxonomyNameLevel3",
+            "Specialty",
+            "ProviderTypeDisplayName",
+            "Sex",
+            "Address1",
+            "SpecialtyID",
+            "State"
+          ],
+          "ProviderGroupID": {
+            "_type": "string",
+            "_length": 4,
+            "_sample": "3999"
+          },
+          "SchedulingName": {
+            "_type": "string",
+            "_length": 19,
+            "_sample": "GA_AVSC_MorganIII_J"
+          },
+          "LastName": {
+            "_type": "string",
+            "_length": 10,
+            "_sample": "Morgan III"
+          },
+          "MiddleName": {
+            "_type": "string",
+            "_length": 6,
+            "_sample": "Harris"
+          },
+          "HideInPortalYN": {
+            "_type": "string",
+            "_length": 1,
+            "_sample": "N"
+          }
+        }
+      },
+      "avg_size": 68504
+    },
+    "/{id}/65/ax/data?sources=billing_tab_properties": {
+      "count": 1,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 42603,
+      "patient_ids": [],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "billing_tab_version",
+          "document_review",
+          "external_document_links",
+          "billing_tab_properties",
+          "initial_chart_referenced_results",
+          "historical_documents",
+          "initial_chart_clinical_results",
+          "historical_problems"
+        ],
+        "historical_problems": {
+          "_type": "object",
+          "_keys": [
+            "PregnancyNotes",
+            "__CLASS__",
+            "FilteredCount",
+            "Problems",
+            "MUCMeta",
+            "VersionToken"
+          ],
+          "Problems": {
+            "_type": "array",
+            "_length": 0,
+            "_items": null
+          }
+        }
+      },
+      "avg_size": 42603
+    },
+    "/{id}/65/ax/data?sources=cancer_cases_note": {
+      "count": 1,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 537787,
+      "patient_ids": [],
+      "clinical_category": "document",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "family_history_default_list",
+          "gpal_history",
+          "has_cancer_cases_container",
+          "ob_episode",
+          "social_history",
+          "gender_and_sexual_identity_questions",
+          "past_medical_history",
+          "social_history_template_availability",
+          "family_history_by_problem",
+          "gyn_toggle_state",
+          "sex_gender_profile",
+          "social_history_declined_reason_options",
+          "cancer_cases_note",
+          "has_cancer_cases",
+          "gpal_score",
+          "perinatal_toggle_state",
+          "episodes_of_care",
+          "perinatal_history",
+          "pregnancy_history",
+          "gyn_history"
+        ],
+        "gender_and_sexual_identity_questions": {
+          "_type": "array",
+          "_length": 8,
+          "_items": {
+            "_type": "object",
+            "_keys": [
+              "SocialHistoryStatus",
+              "Sticky",
+              "QuestionID",
+              "VersionToken",
+              "Answer",
+              "Deleted",
+              "TemplateDeleted",
+              "Required",
+              "IncludeDeclined",
+              "HTMLInputType",
+              "Notes",
+              "Ordering",
+              "Key",
+              "InputType",
+              "PLCQuestion",
+              "__CLASS__",
+              "Question",
+              "Declined"
+            ],
+            "QuestionID": {
+              "_truncated": true
+            }
+          }
+        },
+        "social_history_template_availability": {
+          "_type": "array",
+          "_length": 45,
+          "_items": {
+            "_type": "object",
+            "_keys": [
+              "ID",
+              "NAME"
+            ],
+            "ID": {
+              "_truncated": true
+            },
+            "NAME": {
+              "_truncated": true
+            }
+          }
+        },
+        "family_history_by_problem": {
+          "_type": "object",
+          "_keys": [
+            "note_last_modified_user",
+            "unknown_last_modified_date",
+            "note_version_token",
+            "unknown",
+            "family_history",
+            "unknown_last_modified_user",
+            "simple",
+            "note",
+            "note_last_modified_date"
+          ]
+        },
+        "pregnancy_problems": {
+          "_type": "object",
+          "_keys": [
+            "PregnancyNotes",
+            "__CLASS__",
+            "Problems",
+            "VersionToken"
+          ],
+          "Problems": {
+            "_type": "array",
+            "_length": 0,
+            "_items": null
+          }
+        }
+      },
+      "avg_size": 537787
+    },
+    "/{id}/65/ax/data?sources=meds_not_reviewed_options": {
+      "count": 1,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 283,
+      "patient_ids": [],
+      "clinical_category": "medication",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "meds_not_reviewed_options"
+        ]
+      },
+      "avg_size": 283
+    },
+    "/{id}/65/ax/data?sources=cached_words": {
+      "count": 1,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 199476,
+      "patient_ids": [],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "cached_words"
+        ]
+      },
+      "avg_size": 199476
+    },
+    "/{id}/65/ax/data?sources=sci_review_data": {
+      "count": 1,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 126,
+      "patient_ids": [],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "sci_review_data"
+        ]
+      },
+      "avg_size": 126
+    },
+    "/{id}/65/ax/data?sources=point_of_care_tests": {
+      "count": 1,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 29,
+      "patient_ids": [],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "point_of_care_tests"
+        ]
+      },
+      "avg_size": 29
+    },
+    "/{id}/65/ax/data?sources=patient": {
+      "count": 1,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 4997,
+      "patient_ids": [],
+      "clinical_category": "demographic",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "patient"
+        ],
+        "patient": {
+          "_type": "object",
+          "_keys": [
+            "LastName",
+            "BirthDate",
+            "PrimaryRaceAthenaID",
+            "NextKinPhone",
+            "NextKinRelationship",
+            "GenderMarker",
+            "TranslatedMobilePhoneIndex",
+            "Status",
+            "CountryISO3166Code",
+            "PracticeDate",
+            "Ethnicity",
+            "Sex",
+            "PreferredPharmacy",
+            "State",
+            "RaceAthenaIDs",
+            "PrivacyNoticeGivenDate",
+            "PediatricAgeAndSex",
+            "Zip",
+            "AltFirstName",
+            "PrimaryRaceName"
+          ],
+          "LastName": {
+            "_type": "string",
+            "_length": 5,
+            "_sample": "Young"
+          },
+          "PrimaryRaceAthenaID": {
+            "_type": "string",
+            "_length": 3,
+            "_sample": "900"
+          },
+          "CountryISO3166Code": {
+            "_type": "string",
+            "_length": 2,
+            "_sample": "US"
+          },
+          "RaceAthenaIDs": {
+            "_type": "array",
+            "_length": 1,
+            "_items": {
+              "_truncated": true
+            }
+          },
+          "AltFirstName": {
+            "_type": "string",
+            "_length": 5,
+            "_sample": "Chuck"
+          }
+        }
+      },
+      "avg_size": 4997
+    },
+    "/{id}/65/ax/data?sources=provider_for_chart": {
+      "count": 1,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 1008,
+      "patient_ids": [],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "provider_for_chart"
+        ],
+        "provider_for_chart": {
+          "_type": "object",
+          "_keys": [
+            "ProviderGroupID",
+            "SchedulingName",
+            "LastName",
+            "MiddleName",
+            "VersionToken",
+            "HideInPortalYN",
+            "TaxonomyCode",
+            "DisplayName",
+            "ProviderTypeCategory",
+            "ProviderType",
+            "BilledName",
+            "Suffix",
+            "NPI",
+            "TaxonomyNameLevel3",
+            "Specialty",
+            "ProviderTypeDisplayName",
+            "Sex",
+            "Address1",
+            "SpecialtyID",
+            "State"
+          ],
+          "ProviderGroupID": {
+            "_type": "string",
+            "_length": 4,
+            "_sample": "3999"
+          },
+          "SchedulingName": {
+            "_type": "string",
+            "_length": 19,
+            "_sample": "GA_AVSC_MorganIII_J"
+          },
+          "LastName": {
+            "_type": "string",
+            "_length": 10,
+            "_sample": "Morgan III"
+          },
+          "MiddleName": {
+            "_type": "string",
+            "_length": 6,
+            "_sample": "Harris"
+          },
+          "HideInPortalYN": {
+            "_type": "string",
+            "_length": 1,
+            "_sample": "N"
+          }
+        }
+      },
+      "avg_size": 1008
+    },
+    "/{id}/65/ax/data?sources=patient_insurance": {
+      "count": 1,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 2577,
+      "patient_ids": [],
+      "clinical_category": "demographic",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "patient_insurance"
+        ],
+        "patient_insurance": {
+          "_type": "array",
+          "_length": 2,
+          "_items": {
+            "_type": "object",
+            "_keys": [
+              "CancelledDate",
+              "InsuredState",
+              "InsuredIDNumber",
+              "InsuredAddress1",
+              "VersionToken",
+              "Created",
+              "CreatedBy",
+              "InsuredZIP",
+              "InsuredFirstName",
+              "IDNumber",
+              "RelationshipToInsuredID",
+              "InsuredLastName",
+              "CancelledUser",
+              "SequenceNumber",
+              "InsurancePackage",
+              "InsuredCity",
+              "ID",
+              "PatientID",
+              "EligibilityLastCheckedDate",
+              "RelationshipToInsuredName"
+            ],
+            "InsuredIDNumber": {
+              "_truncated": true
+            },
+            "InsuredFirstName": {
+              "_truncated": true
+            },
+            "IDNumber": {
+              "_truncated": true
+            },
+            "RelationshipToInsuredID": {
+              "_truncated": true
+            },
+            "InsuredLastName": {
+              "_truncated": true
+            }
+          }
+        }
+      },
+      "avg_size": 2577
+    },
+    "/{id}/65/ax/data?sources=order_cpt_code_descriptions": {
+      "count": 1,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 35,
+      "patient_ids": [],
+      "clinical_category": "procedure",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "order_cpt_code_descriptions"
+        ],
+        "order_cpt_code_descriptions": {
+          "_type": "object",
+          "_keys": []
+        }
+      },
+      "avg_size": 35
+    },
+    "/{id}/65/ax/data?sources=chart_id": {
+      "count": 1,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 24,
+      "patient_ids": [],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "chart_id"
+        ],
+        "chart_id": {
+          "_type": "string",
+          "_length": 8,
+          "_sample": "24482158"
+        }
+      },
+      "avg_size": 24
+    },
+    "/{id}/65/ax/data?sources=chart_sharing_user_lookup": {
+      "count": 1,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 3787443,
+      "patient_ids": [],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "chart_sharing_user_lookup"
+        ]
+      },
+      "avg_size": 3787443
+    },
+    "/{id}/65/ax/data?sources=historical_exam_template_encounter_hashes": {
+      "count": 1,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 2856,
+      "patient_ids": [],
+      "clinical_category": "encounter",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "historical_exam_template_encounter_hashes"
+        ]
+      },
+      "avg_size": 2856
+    },
+    "/{id}/65/ax/data?sources=vaccine_forecast": {
+      "count": 1,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 26,
+      "patient_ids": [],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "vaccine_forecast"
+        ]
+      },
+      "avg_size": 26
+    },
+    "/{id}/65/ax/data?sources=vaccine_users": {
+      "count": 1,
+      "methods": [
+        "GET"
+      ],
+      "total_size": 220,
+      "patient_ids": [],
+      "clinical_category": "athena_data",
+      "sample_payload_structure": {
+        "_type": "object",
+        "_keys": [
+          "vaccine_users"
+        ]
+      },
+      "avg_size": 220
+    }
+  },
+  "patients": {
+    "35212677": {
+      "event_count": 115,
+      "endpoints": [
+        "/{id}/65/ax/data?sources=enterprise_id",
+        "/{id}/65/ax/data?sources=encounter_and_chart_security_labels",
+        "/{id}/65/ax/data?sources=suspected_hcc_diagnoses",
+        "/{id}/65/ax/data?sources=unredacted_magic_words_by_paperform_id",
+        "/{id}/65/ax/data?sources=transcriptions_status",
+        "/{id}/65/ax/data?sources=cds_raw_encounter_sessions",
+        "/{id}/65/ax/data?sources=alerted_measures",
+        "/{id}/65/ax/data?sources=active_problems",
+        "/{id}/65/ax/data?sources=parsed_summary",
+        "/{id}/65/ax/data?sources=screening",
+        "/{id}/65/ax/data?sources=declined_reason_options",
+        "/{id}/65/ax/data?sources=pre_procedure_documentation",
+        "/{id}/65/ax/data?sources=user_signoff_permission_level",
+        "active-fetch/FETCH_INTRAOP",
+        "/{id}/65/ax/data?sources=p4p_data_no_preload",
+        "/{id}/65/ax/data?sources=pre_sedation_assessment",
+        "/{id}/65/ax/data?sources=stage_procedure_vitals",
+        "/{id}/65/ax/data?sources=has_cancer_cases_container",
+        "/{id}/65/ax/data?sources=import_alerts",
+        "/{id}/65/ax/data?sources=measurements",
+        "/{id}/65/ax/data?sources=billing_tab_em_coder_state",
+        "/{id}/65/ax/data?sources=patient_statuses_and_locations",
+        "/{id}/65/ax/data?sources=historical_clinical_encounter_hashes",
+        "/{id}/65/ax/data?sources=external_document_links",
+        "/{id}/65/ax/data?sources=telehealth_patient_online_status_by_appointment_id",
+        "/{id}/65/ax/data?sources=letter_groups",
+        "/{id}/65/ax/data?sources=has_cancer_cases",
+        "/{id}/65/ax/data?sources=patient_has_united_health_group_insurance",
+        "/{id}/65/ax/data?sources=encounter_claim_is_created",
+        "/{id}/65/ax/data?sources=hcc_config_hide_raf_weight",
+        "/{id}/65/ax/data?sources=valid_screening_questionnaire_templates_entity",
+        "/{id}/65/ax/data?sources=ccm_enrollment",
+        "/{id}/65/ax/data?sources=qmaas_enrolled_measures",
+        "active-fetch/FETCH_POSTOP",
+        "/{id}/65/ax/data?sources=family_history_by_problem",
+        "/{id}/65/ax/data?sources=speechtotext_terms",
+        "/{id}/65/ax/data?sources=linkable_screener_documents",
+        "/{id}/65/ax/data?sources=future_appointments",
+        "/{id}/65/ax/data?sources=hcc_model_config",
+        "/{id}/65/ax/data?sources=acute_visit_summaries",
+        "/{id}/65/ax/data?sources=active_medications",
+        "/{id}/65/ax/data?sources=historical_problems",
+        "/{id}/65/ax/data?sources=implant_history"
+      ],
+      "clinical_categories": [
+        "demographic",
+        "medication",
+        "procedure",
+        "problem",
+        "encounter",
+        "active_fetch",
+        "document",
+        "vital",
+        "lab",
+        "athena_data"
+      ]
+    },
+    "24547563": {
+      "event_count": 6,
+      "endpoints": [
+        "https://hospitalclinicalnano.api.athena.io/clinicals-external-data/api/v1/externaldata/manualReconciliation/MedicationDispense/{id}/{id}",
+        "/{id}/65/ax/security_label/chart/{id}/security_labels?...",
+        "https://patientrisk.api.athena.io/patient-ra-gaps_prode1/api/v1/ragaps/count?...",
+        "https://hospitalclinicalnano.api.athena.io/clinicals-external-data/api/v1/externaldata/manualReconciliation/AllergyIntolerance/{id}/{id}"
+      ],
+      "clinical_categories": [
+        "medication",
+        "demographic",
+        "lab",
+        "allergy"
+      ]
+    },
+    "185396390": {
+      "event_count": 15,
+      "endpoints": [
+        "/{id}/65/ax/encounter/{id}/save_sections_reviewed",
+        "/{id}/65/ax/encounter/{id}/image_documentation?...",
+        "/{id}/65/ax/encounter/{id}/image_documentation",
+        "/{id}/65/ax/encounter/{id}/jotter_images?..."
+      ],
+      "clinical_categories": [
+        "document",
+        "encounter"
+      ]
+    }
+  },
+  "clinical_categories": {
+    "athena_data": 139,
+    "encounter": 115,
+    "unknown": 10,
+    "demographic": 23,
+    "medication": 25,
+    "problem": 18,
+    "procedure": 10,
+    "vital": 20,
+    "allergy": 8,
+    "document": 55,
+    "lab": 55,
+    "active_fetch": 332,
+    "imaging": 2
+  },
+  "record_types": {},
+  "payload_key_frequency": {
+    "recent_user_data": 5,
+    "user_preferences": 9,
+    "dashboard_postings": 5,
+    "delegated_sign_off": 5,
+    "user_practice_roles": 5,
+    "widget_data": 5,
+    "is_beta_coordinator": 5,
+    "all_practice_roles": 5,
+    "selected_inbox_departments": 5,
+    "inbox_departments": 5,
+    "sign_off_documents": 5,
+    "athena_users": 5,
+    "lab_results_info_by_appointment_id": 5,
+    "telehealth_one_way_messages_by_appointment_id": 5,
+    "schedule_departments": 5,
+    "previous_names": 5,
+    "encounter_reasons_for_schedule": 5,
+    "user": 5,
+    "patient_image_info": 5,
+    "telehealth_status_by_appointment_id": 5,
+    "frequently_selected_schedule_picker_items": 5,
+    "schedule_state": 5,
+    "insurance_names_by_visit": 5,
+    "phone_call_info": 5,
+    "telehealth_enabled_department": 5,
+    "appointments": 5,
+    "room_status_info": 5,
+    "telehealth_patient_online_status_by_appointment_id": 8,
+    "hospital_patients_by_id": 5,
+    "providers": 5,
+    "telehealth_patient_waiting_by_appointment_id": 5,
+    "hospital_visits_and_appointments": 5,
+    "encounter_prep_for_schedule": 5,
+    "hospital_patient_image_info": 5,
+    "appointment_is_telehealth": 5,
+    "encounter_timestamps": 5,
+    "eligibility_by_appointment_id": 5,
+    "hospital_schedule_state": 5,
+    "episode_info": 5,
+    "patients_by_id": 5,
+    "current_visit_segments_by_visit": 5,
+    "encounters_by_appointment_id": 5,
+    "mdp_partners_user_lookup": 1,
+    "id": 2,
+    "userId": 2,
+    "login": 2,
+    "createdAt": 2,
+    "expiresAt": 2,
+    "status": 2,
+    "lastPasswordVerification": 2,
+    "lastFactorVerification": 2,
+    "amr": 2,
+    "mfaActive": 2,
+    "_links": 2,
+    "assigned_to_list_view": 2,
+    "inbox_buckets_data": 4,
+    "inbox_view_by_preferences": 2,
+    "inbox_users_list_view": 2,
+    "assignee_coverages_list_view": 5,
+    "user_lookup": 5,
+    "assignee_coverages": 5,
+    "inbox_users": 5,
+    "assigned_to": 5,
+    "handled_inbox_categories": 5,
+    "inbox_warnings": 5,
+    "patients_blocked_status": 7,
+    "appointment_ticklers": 4,
+    "simple_future_appointments": 4,
+    "future_encounters": 4,
+    "last_visit_summary": 4,
+    "clinical_encounter": 2,
+    "historical_clinical_encounter_hashes": 16,
+    "last_closed_encounter_date": 8,
+    "coumadin_concept_medication_ids": 4,
+    "reconcile_source_info": 4,
+    "reconciliation_sections": 4,
+    "specialty_id_to_name_mapping": 8,
+    "active_medications": 4,
+    "reconcile_count": 1,
+    "hcc_raf_hcc_factors": 4,
+    "is_external_gaps_enabled": 4,
+    "hcc_raf_hcc_interaction_groups": 4,
+    "health_status": 4,
+    "import_alerts": 4,
+    "suspected_non_hcc_diagnoses": 4,
+    "hcc_raf_hcc_interactions": 4,
+    "initial_active_medications": 4,
+    "available_contacts_and_consents": 4,
+    "hcc_resource_extended": 4,
+    "hcc_raf_demographics_factors": 4,
+    "active_problems": 4,
+    "hcc_raf_documented_hccs": 4,
+    "chart_security_labels": 10,
+    "hcc_raf_apcc_factors": 4,
+    "hcc_buddy_code_requirements": 4,
+    "hcc_raf_hcc_exclusions": 4,
+    "hcc_raf_patient_demographic_factor": 4,
+    "active_telehealth_participants": 4,
+    "open_orders": 4,
+    "hcc_raf_patient_age_and_sex": 4,
+    "suspected_hcc_diagnoses": 7,
+    "potential_hcc_diagnoses": 4,
+    "medication_warnings": 4,
+    "acute_visit_summaries": 4,
+    "recent_activity_hashes": 4,
+    "briefing_timeline": 4,
+    "recent_result_documents": 4,
+    "recent_clinical_results": 4,
+    "external_encounters": 4,
+    "historical_visits": 4,
+    "orders": 5,
+    "dosage_additional_instructions": 4,
+    "vaccine_not_given_reasons": 4,
+    "all_relations": 4,
+    "dosage_frequencies": 4,
+    "pregnancy_options": 4,
+    "place_of_service_options": 1,
+    "departments": 1,
+    "vaccine_routes": 4,
+    "states": 4,
+    "confidentiality_reason_options": 7,
+    "allergy_severities": 4,
+    "alarm_days_options": 4,
+    "administer_sites": 4,
+    "universal_text_area_conf": 4,
+    "created_macros": 4,
+    "clinical_order_type_groups": 4,
+    "speechtotext_vendor": 4,
+    "implant_options": 4,
+    "medication_stop_reasons": 4,
+    "allergy_reactions": 4,
+    "all_dosage_units": 4,
+    "all_dosage_routes": 4,
+    "provider_specialty_user_preference": 4,
+    "measurements": 4,
+    "vitals": 106,
+    "speechtotext_terms": 4,
+    "text_macros": 4,
+    "vitals_configuration": 4,
+    "temporary_vitals": 4,
+    "vitals_unit_conversion_enabled": 4,
+    "vitals_devices_supported": 4,
+    "measurement_unit_options": 1,
+    "appointment_types": 4,
+    "hcc_config_hide_raf_weight": 5,
+    "department_info": 9,
+    "imo_search_proxy_conf": 5,
+    "problem_insights_proxy_conf": 4,
+    "screening": 11,
+    "current_encounter_layout": 1,
+    "procedure_default_list": 4,
+    "historical_orders": 4,
+    "patient_cases": 4,
+    "vaccine_addendum": 4,
+    "clinical_paper_forms": 4,
+    "vaccine_groups": 4,
+    "vaccine_manufacturers": 4,
+    "blank_paper_forms": 4,
+    "provider_id": 1,
+    "current_user_provider": 4,
+    "vaccines_entity": 4,
+    "procedure": 4,
+    "default_clinical_providers": 4,
+    "preferred_clinical_providers": 4,
+    "patient_insurance": 5,
+    "alerted_measures": 4,
+    "provider_option_list": 4,
+    "ccm_enrollment": 4,
+    "contact_persons": 4,
+    "user_relationships": 4,
+    "pdmp_conf": 4,
+    "supervising_provider_option_list": 4,
+    "risk_contract_status": 4,
+    "default_order_route_clinical_providers": 4,
+    "order_groups": 4,
+    "care_team": 4,
+    "coordinator_relationships": 4,
+    "confidential_chart_flag": 4,
+    "care_team_roles": 4,
+    "has_insurance_policy": 4,
+    "default_pharmacy": 4,
+    "pdmp_provider_access": 4,
+    "encounter_and_chart_security_labels": 15,
+    "enhanced_attribution_enabled": 4,
+    "billing_tab_version": 4,
+    "document_review": 4,
+    "external_document_links": 4,
+    "billing_tab_properties": 4,
+    "initial_chart_referenced_results": 4,
+    "historical_documents": 4,
+    "initial_chart_clinical_results": 4,
+    "historical_problems": 4,
+    "family_history_default_list": 4,
+    "gpal_history": 4,
+    "has_cancer_cases_container": 7,
+    "ob_episode": 4,
+    "social_history": 4,
+    "gender_and_sexual_identity_questions": 4,
+    "past_medical_history": 4,
+    "social_history_template_availability": 8,
+    "family_history_by_problem": 4,
+    "gyn_toggle_state": 4,
+    "sex_gender_profile": 4,
+    "social_history_declined_reason_options": 4,
+    "cancer_cases_note": 4,
+    "has_cancer_cases": 4,
+    "gpal_score": 4,
+    "perinatal_toggle_state": 4,
+    "episodes_of_care": 4,
+    "perinatal_history": 4,
+    "pregnancy_history": 4,
+    "gyn_history": 4,
+    "pregnancy_problems": 4,
+    "chart_abstraction": 1,
+    "cmaas_config": 4,
+    "file_links": 7,
+    "qmaas_enrolled_measures": 4,
+    "qmaas_realtime_data": 4,
+    "historical_clinical_encounter_summaries": 8,
+    "initial_historical_clinical_encounter_summaries": 4,
+    "future_appointments": 4,
+    "historical_clinical_encounters": 4,
+    "historical_encounter_attachments": 8,
+    "most_recent_open_encounter": 4,
+    "initial_historical_clinical_encounters": 4,
+    "p4p_user": 4,
+    "p4p_patient_settings": 4,
+    "p4p_guidelines": 4,
+    "p4p_dedupe": 4,
+    "p4p_satisfaction": 4,
+    "p4p_qmtab_active_user": 4,
+    "p4p_data_no_preload": 4,
+    "p4p_measure_group": 4,
+    "p4p_results": 4,
+    "sessionId": 4,
+    "potentialDiagnosisCount": 4,
+    "suspectedDiagnosisCount": 4,
+    "potentialDismissedCount": 4,
+    "suspectedDismissedCount": 4,
+    "closedCount": 4,
+    "riskScore": 4,
+    "hccDemographicFactor": 4,
+    "apccFactor": 4,
+    "hccInteractionFactor": 4,
+    "hccGapScore": 4,
+    "search_token": 4,
+    "problem_token": 4,
+    "dsm_token": 4,
+    "expiration_ms": 4,
+    "search_endpoint_uri": 4,
+    "diagnosis_endpoint_uri": 4,
+    "procedure_endpoint_uri": 4,
+    "problem_endpoint_uri": 4,
+    "categories": 4,
+    "raw": 115,
+    "surgical": 115,
+    "documents": 115,
+    "allergies": 115,
+    "meds_not_reviewed_options": 4,
+    "reasons_for_resources": 3,
+    "cached_words": 4,
+    "order_summaries_by_encounter": 2,
+    "implant_history": 2,
+    "sci_review_data": 4,
+    "chart_timeline": 3,
+    "classic_document": 5,
+    "point_of_care_tests": 4,
+    "patient": 4,
+    "provider_for_chart": 1,
+    "referral_attachments": 2,
+    "NEXTDATE": 5,
+    "ALARMDAYSHTML": 5,
+    "DEPARTMENTLIST": 5,
+    "PROVIDERLIST": 5,
+    "NUMDAYSHTML": 5,
+    "UPCOMINGDATA": 5,
+    "APPOINTMENTTYPELIST": 5,
+    "auth_task_status_for_order": 2,
+    "auth_task_show_react_widget": 2,
+    "has_security_labels": 5,
+    "patient_has_united_health_group_insurance": 4,
+    "encounter_security_labels": 15,
+    "order_cpt_code_descriptions": 4,
+    "chart_id": 1,
+    "document_findings": 6,
+    "network_documents": 2,
+    "order_not_done_reasons_by_id": 3,
+    "cdc_id_to_order_not_done_reason_id_map": 3,
+    "exclusion_reason_options": 3,
+    "horizontal_prism_base_codes": 3,
+    "gcode_to_cdsm_mapping": 3,
+    "cpsw_settings": 3,
+    "cancel_reasons": 3,
+    "hcpcs_modifiers_by_code": 3,
+    "diagnosis_attributes": 3,
+    "hcpcs_modifiers": 3,
+    "glasses_types": 3,
+    "rigid_contact_lens_products": 3,
+    "out_of_network_options": 3,
+    "reported_by_options": 3,
+    "diagnosis_attribute_sets": 3,
+    "advanced_imaging_clinical_order_type_ids": 3,
+    "spellcheck_conf": 3,
+    "vertical_prism_base_codes": 3,
+    "days_supply_enabled_states": 3,
+    "soft_contact_lens_products": 3,
+    "contact_lens_products": 3,
+    "can_dictate": 3,
+    "summary": 3,
+    "amendment_note_data": 3,
+    "diagnoses_orders_note": 3,
+    "enterprise_id": 3,
+    "pt_episodes": 3,
+    "dictations": 3,
+    "provider_review": 3,
+    "transcription_pending_assignee": 3,
+    "exercises": 6,
+    "encounter_has_pending_dictation": 3,
+    "encounter_close_failed": 3,
+    "attached_summary_of_care_records": 3,
+    "interpretations": 3,
+    "interpretation_templates": 3,
+    "suggested_encounter_reasons": 3,
+    "transition_of_care_flag": 3,
+    "attachable_summary_of_care_records": 3,
+    "encounter_results": 3,
+    "summary_of_care_record_unavailable_flag": 3,
+    "letter_groups": 3,
+    "parsed_summary": 3,
+    "scheduling_options": 3,
+    "encounter_section_tokens": 3,
+    "encounter_has_intake": 3,
+    "diagnoses": 3,
+    "cds_user_alert_status": 3,
+    "supervising_provider_required_data": 3,
+    "telehealth_place_of_service_indicator": 3,
+    "order_set_diagnosis_imo_code_map": 3,
+    "network_scheduling_contexts": 3,
+    "encounter_total_time_spent": 3,
+    "patient_has_medicare_part_b": 3,
+    "icd_data_by_icd10_code": 3,
+    "cot_to_ndc_options_map": 3,
+    "icd_codes": 3,
+    "specimen_sources": 3,
+    "max_unstructured_sig_length": 3,
+    "prescription_quantity_unit_data": 3,
+    "order_sets": 3,
+    "discussion_note_topics": 3,
+    "max_pharmacy_note_length": 3,
+    "cpot_information": 3,
+    "sections_reviewed_status": 3,
+    "cpsw_provider_coordinator_data": 3,
+    "pharmacy_note_required": 3,
+    "vaccine_administered_quantity_status_by_encounter": 3,
+    "user_signoff_permission_level": 3,
+    "drug_formularies": 3,
+    "cot_contains_gabapentin_map": 3,
+    "structured_goals_enabled": 3,
+    "icd10_switchover_date": 3,
+    "integrated_devices": 3,
+    "streamlined_mar_order_summary": 3,
+    "vaccine_administered_quantity_status": 3,
+    "prescription_level_text_consent": 3,
+    "can_provider_sign_epcs": 3,
+    "order_not_done_reasons": 3,
+    "standing_order_options": 3,
+    "assessment": 3,
+    "previous_medications": 3,
+    "medication_benefit_conf": 3,
+    "care_plan_goals_enabled": 3,
+    "use_icd10_for_encounter": 3,
+    "vaccine_data": 3,
+    "sections_discussed": 3,
+    "users": 3,
+    "transitions_of_care": 3,
+    "network_scheduling_permissions": 3,
+    "schedule_within_options": 3,
+    "epcs_authorized_data": 3,
+    "prescription_change_options": 3,
+    "selected_discussion_note_topics": 3,
+    "out_of_network_tracking_status": 3,
+    "administer_routes": 3,
+    "epcs_eligible_data": 3,
+    "care_plan": 3,
+    "signoff_permissions": 3,
+    "patient_savings_offers": 3,
+    "encounter_attachments": 3,
+    "wc_saved_finding_sets": 3,
+    "wc_most_used_saved_finding_sets": 3,
+    "pe_saved_finding_sets": 3,
+    "historical_exam_template_encounter_hashes": 4,
+    "ros_most_used_saved_finding_sets": 3,
+    "hpi_most_used_saved_finding_sets": 3,
+    "pe_most_used_saved_finding_sets": 3,
+    "cmaas_enabled_for_encounter": 3,
+    "hpi_saved_finding_sets": 3,
+    "ros_saved_finding_sets": 3,
+    "billing_tab_em_coder_state": 3,
+    "encounter_review_document_for_cosignature": 3,
+    "encounter_has_missing_procedure_outcomes": 3,
+    "procedure_times": 3,
+    "wc_templates": 3,
+    "ambulatory_procedure_times": 3,
+    "ros_most_used_templates": 3,
+    "pe_templates": 3,
+    "hpi_current_findings": 3,
+    "ros_current_findings": 3,
+    "hpi_most_used_templates": 3,
+    "touched_users": 3,
+    "wc_current_findings": 3,
+    "pe_most_used_templates": 3,
+    "pe_current_findings": 3,
+    "hpi_templates": 3,
+    "wc_most_used_templates": 3,
+    "provider_numbers": 3,
+    "post_procedure_documentation": 3,
+    "ros_templates": 3,
+    "stage_procedure_vitals": 15,
+    "procedure_medication_totals": 3,
+    "configured_procedure_medications_intra": 3,
+    "baseline_procedure_vitals": 3,
+    "procedure_medication_oxygen_delivery_method": 3,
+    "procedure_timeout_checklist": 3,
+    "portal_display_name": 3,
+    "procedure_documentations": 3,
+    "procedure_medication_note": 3,
+    "procedure_medication_doses_intra": 3,
+    "previous_procedure_templates": 3,
+    "procedure_templates": 3,
+    "encounter_reason_transcription_date": 3,
+    "intra_procedure_documentations": 3,
+    "chart_sharing_user_lookup": 1,
+    "pre_procedure_documentation": 3,
+    "pre_sedation_assessment": 3,
+    "appointment": 3,
+    "episodes_by_type": 3,
+    "valid_screening_questionnaire_templates_entity": 3,
+    "declined_reason_options": 3,
+    "patient_statuses_and_locations": 3,
+    "snippet_sections": 3,
+    "other_sections": 3,
+    "summaries": 3,
+    "summary_sections": 3,
+    "encounter_section_signoffs": 3,
+    "hcc_model_config": 3,
+    "cds_raw_encounter_sessions": 3,
+    "transcriptions_status": 3,
+    "encounter_section_attributions": 28,
+    "unredacted_magic_words_by_paperform_id": 6,
+    "encounter_claim_is_created": 3,
+    "snomed_to_icd10_map": 5,
+    "linkable_screener_documents": 3,
+    "security_labels_by_resource_identifiers_and_types": 3,
+    "PATIENTALLERGY.REVIEWED": 1,
+    "REVIEWED.PATIENTPROBLEMLIST": 2,
+    "REVIEWED.MEDICATIONLIST": 2,
+    "vaccine_forecast": 1,
+    "REVIEWED.VACCINELIST": 1,
+    "vaccine_users": 1,
+    "clinical_results_by_order_type": 2,
+    "result_documents_by_order_type": 2,
+    "patientId": 65,
+    "_meta": 65,
+    "REVIEWED.PATIENTSURGICALHISTORY": 1,
+    "REVIEWED.PASTMEDICALHISTORY": 1
+  },
+  "timeline": [
+    {
+      "timestamp": "2025-12-13T21:12:52.686105",
+      "endpoint": "/{id}/65/ax/data?sources=dashboard_postings",
+      "category": "athena_data"
+    },
+    {
+      "timestamp": "2025-12-13T21:12:52.704518",
+      "endpoint": "/{id}/65/ax/data?sources=all_practice_roles",
+      "category": "athena_data"
+    },
+    {
+      "timestamp": "2025-12-13T21:12:52.721041",
+      "endpoint": "/{id}/65/ax/data?sources=eligibility_by_appointment_id",
+      "category": "encounter"
+    },
+    {
+      "timestamp": "2025-12-13T21:12:52.818255",
+      "endpoint": "/{id}/65/ax/data?sources=mdp_partners_user_lookup",
+      "category": "athena_data"
+    },
+    {
+      "timestamp": "2025-12-13T21:12:53.020025",
+      "endpoint": "https://identity.athenahealth.com/api/v1/sessions/me",
+      "category": "unknown"
+    },
+    {
+      "timestamp": "2025-12-13T21:12:53.067719",
+      "endpoint": "/{id}/65/ax/data?sources=inbox_buckets_data",
+      "category": "athena_data"
+    },
+    {
+      "timestamp": "2025-12-13T21:12:53.190681",
+      "endpoint": "/{id}/65/ax/data?sources=inbox_users",
+      "category": "athena_data"
+    },
+    {
+      "timestamp": "2025-12-13T21:13:03.446618",
+      "endpoint": "/{id}/65/ax/data?sources=dashboard_postings",
+      "category": "athena_data"
+    },
+    {
+      "timestamp": "2025-12-13T21:13:03.457047",
+      "endpoint": "/{id}/65/ax/data?sources=all_practice_roles",
+      "category": "athena_data"
+    },
+    {
+      "timestamp": "2025-12-13T21:13:03.466251",
+      "endpoint": "/{id}/65/ax/data?sources=eligibility_by_appointment_id",
+      "category": "encounter"
+    },
+    {
+      "timestamp": "2025-12-13T21:13:03.921899",
+      "endpoint": "/{id}/65/ax/data?sources=inbox_users",
+      "category": "athena_data"
+    },
+    {
+      "timestamp": "2025-12-13T21:14:04.094105",
+      "endpoint": "/{id}/65/ax/data?sources=inbox_buckets_data",
+      "category": "athena_data"
+    },
+    {
+      "timestamp": "2025-12-13T21:14:04.904040",
+      "endpoint": "/{id}/65/ax/data?sources=patients_blocked_status",
+      "category": "demographic"
+    },
+    {
+      "timestamp": "2025-12-13T21:14:08.818561",
+      "endpoint": "/{id}/65/ax/data?sources=clinical_encounter",
+      "category": "encounter"
+    },
+    {
+      "timestamp": "2025-12-13T21:14:08.832720",
+      "endpoint": "/{id}/65/ax/data?sources=active_medications",
+      "category": "medication"
+    },
+    {
+      "timestamp": "2025-12-13T21:14:08.867241",
+      "endpoint": "/{id}/65/ax/data?sources=active_problems",
+      "category": "problem"
+    },
+    {
+      "timestamp": "2025-12-13T21:14:08.960135",
+      "endpoint": "/{id}/65/ax/data?sources=medication_warnings",
+      "category": "medication"
+    },
+    {
+      "timestamp": "2025-12-13T21:14:09.360996",
+      "endpoint": "/{id}/65/ax/data?sources=acute_visit_summaries",
+      "category": "encounter"
+    },
+    {
+      "timestamp": "2025-12-13T21:14:09.476295",
+      "endpoint": "/{id}/65/ax/data?sources=last_closed_encounter_date",
+      "category": "encounter"
+    },
+    {
+      "timestamp": "2025-12-13T21:14:09.503793",
+      "endpoint": "/{id}/65/ax/data?sources=orders",
+      "category": "procedure"
+    },
+    {
+      "timestamp": "2025-12-13T21:14:09.529024",
+      "endpoint": "/{id}/65/ax/data?sources=alarm_days_options",
+      "category": "athena_data"
+    },
+    {
+      "timestamp": "2025-12-13T21:14:09.701253",
+      "endpoint": "/{id}/65/ax/data?sources=appointment_types",
+      "category": "encounter"
+    },
+    {
+      "timestamp": "2025-12-13T21:14:10.697979",
+      "endpoint": "/{id}/65/ax/data?sources=hcc_config_hide_raf_weight",
+      "category": "vital"
+    },
+    {
+      "timestamp": "2025-12-13T21:14:10.704008",
+      "endpoint": "/{id}/65/ax/data?sources=department_info",
+      "category": "athena_data"
+    },
+    {
+      "timestamp": "2025-12-13T21:14:10.782283",
+      "endpoint": "/{id}/65/ax/data?sources=specialty_id_to_name_mapping",
+      "category": "athena_data"
+    },
+    {
+      "timestamp": "2025-12-13T21:14:10.805499",
+      "endpoint": "/{id}/65/ax/data?sources=imo_search_proxy_conf",
+      "category": "athena_data"
+    },
+    {
+      "timestamp": "2025-12-13T21:14:10.977650",
+      "endpoint": "/{id}/65/ax/data?sources=department_info",
+      "category": "athena_data"
+    },
+    {
+      "timestamp": "2025-12-13T21:14:11.012479",
+      "endpoint": "/{id}/65/ax/data?sources=problem_insights_proxy_conf",
+      "category": "problem"
+    },
+    {
+      "timestamp": "2025-12-13T21:14:11.025058",
+      "endpoint": "/{id}/65/ax/data?sources=screening",
+      "category": "athena_data"
+    },
+    {
+      "timestamp": "2025-12-13T21:14:11.030191",
+      "endpoint": "/{id}/65/ax/data?sources=vaccine_addendum",
+      "category": "athena_data"
+    },
+    {
+      "timestamp": "2025-12-13T21:14:11.040418",
+      "endpoint": "/{id}/65/ax/data?sources=alerted_measures",
+      "category": "athena_data"
+    },
+    {
+      "timestamp": "2025-12-13T21:14:11.049622",
+      "endpoint": "/{id}/65/ax/data?sources=billing_tab_properties",
+      "category": "athena_data"
+    },
+    {
+      "timestamp": "2025-12-13T21:14:11.056760",
+      "endpoint": "https://hospitalclinicalnano.api.athena.io/clinicals-externa",
+      "category": "allergy"
+    },
+    {
+      "timestamp": "2025-12-13T21:14:11.062390",
+      "endpoint": "https://hospitalclinicalnano.api.athena.io/clinicals-externa",
+      "category": "medication"
+    },
+    {
+      "timestamp": "2025-12-13T21:14:11.068508",
+      "endpoint": "https://hospitalclinicalnano.api.athena.io/clinicals-externa",
+      "category": "medication"
+    },
+    {
+      "timestamp": "2025-12-13T21:14:11.086260",
+      "endpoint": "/{id}/65/ax/data?sources=cancer_cases_note",
+      "category": "document"
+    },
+    {
+      "timestamp": "2025-12-13T21:14:11.146147",
+      "endpoint": "/{id}/65/ax/data?sources=screening",
+      "category": "athena_data"
+    },
+    {
+      "timestamp": "2025-12-13T21:14:11.149953",
+      "endpoint": "/{id}/65/ax/data?sources=qmaas_enrolled_measures",
+      "category": "athena_data"
+    },
+    {
+      "timestamp": "2025-12-13T21:14:11.177520",
+      "endpoint": "/{id}/65/ax/security_label/chart/{id}/security_labels?...",
+      "category": "lab"
+    },
+    {
+      "timestamp": "2025-12-13T21:14:11.250488",
+      "endpoint": "/{id}/65/ax/data",
+      "category": "athena_data"
+    },
+    {
+      "timestamp": "2025-12-13T21:14:11.275617",
+      "endpoint": "/{id}/65/ax/data?sources=future_appointments",
+      "category": "encounter"
+    },
+    {
+      "timestamp": "2025-12-13T21:14:11.363542",
+      "endpoint": "/{id}/65/ax/data?sources=p4p_data_no_preload",
+      "category": "athena_data"
+    },
+    {
+      "timestamp": "2025-12-13T21:14:11.513171",
+      "endpoint": "/{id}/65/ax/data?sources=social_history_template_availabilit",
+      "category": "lab"
+    },
+    {
+      "timestamp": "2025-12-13T21:14:11.989076",
+      "endpoint": "/{id}/65/ax/data?sources=encounter_and_chart_security_labels",
+      "category": "lab"
+    },
+    {
+      "timestamp": "2025-12-13T21:14:12.200250",
+      "endpoint": "/{id}/65/ax/security_label/chart/{id}/security_labels?...",
+      "category": "lab"
+    },
+    {
+      "timestamp": "2025-12-13T21:14:39.725883",
+      "endpoint": "https://providerfriendlyterms.api.athena.io/imo-search-proxy",
+      "category": "unknown"
+    },
+    {
+      "timestamp": "2025-12-13T21:14:39.942007",
+      "endpoint": "https://patientrisk.api.athena.io/patient-ra-gaps_prode1/api",
+      "category": "demographic"
+    },
+    {
+      "timestamp": "2025-12-13T21:14:39.968389",
+      "endpoint": "https://providerfriendlyterms.api.athena.io/imo-search-proxy",
+      "category": "unknown"
+    },
+    {
+      "timestamp": "2025-12-13T21:14:40.817921",
+      "endpoint": "https://api.imohealth.com/problemlistmanagement/problems/cat",
+      "category": "problem"
+    },
+    {
+      "timestamp": "2025-12-13T21:14:58.833469",
+      "endpoint": "active-fetch/FETCH_PREOP",
+      "category": "active_fetch"
+    },
+    {
+      "timestamp": "2025-12-13T21:14:59.520933",
+      "endpoint": "active-fetch/FETCH_PREOP",
+      "category": "active_fetch"
+    },
+    {
+      "timestamp": "2025-12-13T21:14:59.611619",
+      "endpoint": "active-fetch/FETCH_PREOP",
+      "category": "active_fetch"
+    },
+    {
+      "timestamp": "2025-12-13T21:15:00.136266",
+      "endpoint": "active-fetch/FETCH_PREOP",
+      "category": "active_fetch"
+    },
+    {
+      "timestamp": "2025-12-13T21:15:00.667290",
+      "endpoint": "active-fetch/FETCH_PREOP",
+      "category": "active_fetch"
+    },
+    {
+      "timestamp": "2025-12-13T21:15:01.054510",
+      "endpoint": "active-fetch/FETCH_PREOP",
+      "category": "active_fetch"
+    },
+    {
+      "timestamp": "2025-12-13T21:15:01.507726",
+      "endpoint": "active-fetch/FETCH_PREOP",
+      "category": "active_fetch"
+    },
+    {
+      "timestamp": "2025-12-13T21:15:01.567607",
+      "endpoint": "active-fetch/FETCH_INTRAOP",
+      "category": "active_fetch"
+    },
+    {
+      "timestamp": "2025-12-13T21:15:02.141625",
+      "endpoint": "active-fetch/FETCH_PREOP",
+      "category": "active_fetch"
+    },
+    {
+      "timestamp": "2025-12-13T21:15:02.609641",
+      "endpoint": "active-fetch/FETCH_PREOP",
+      "category": "active_fetch"
+    },
+    {
+      "timestamp": "2025-12-13T21:15:03.131029",
+      "endpoint": "active-fetch/FETCH_PREOP",
+      "category": "active_fetch"
+    },
+    {
+      "timestamp": "2025-12-13T21:15:03.518241",
+      "endpoint": "active-fetch/FETCH_POSTOP",
+      "category": "active_fetch"
+    },
+    {
+      "timestamp": "2025-12-13T21:15:03.826799",
+      "endpoint": "active-fetch/FETCH_PREOP",
+      "category": "active_fetch"
+    },
+    {
+      "timestamp": "2025-12-13T21:15:04.340740",
+      "endpoint": "active-fetch/FETCH_PREOP",
+      "category": "active_fetch"
+    },
+    {
+      "timestamp": "2025-12-13T21:15:04.347335",
+      "endpoint": "active-fetch/FETCH_POSTOP",
+      "category": "active_fetch"
+    },
+    {
+      "timestamp": "2025-12-13T21:15:04.843355",
+      "endpoint": "active-fetch/FETCH_INTRAOP",
+      "category": "active_fetch"
+    },
+    {
+      "timestamp": "2025-12-13T21:15:04.851988",
+      "endpoint": "active-fetch/FETCH_POSTOP",
+      "category": "active_fetch"
+    },
+    {
+      "timestamp": "2025-12-13T21:15:05.232288",
+      "endpoint": "active-fetch/FETCH_INTRAOP",
+      "category": "active_fetch"
+    },
+    {
+      "timestamp": "2025-12-13T21:15:05.278410",
+      "endpoint": "active-fetch/FETCH_POSTOP",
+      "category": "active_fetch"
+    },
+    {
+      "timestamp": "2025-12-13T21:15:05.668235",
+      "endpoint": "active-fetch/FETCH_INTRAOP",
+      "category": "active_fetch"
+    },
+    {
+      "timestamp": "2025-12-13T21:15:05.739992",
+      "endpoint": "active-fetch/FETCH_POSTOP",
+      "category": "active_fetch"
+    },
+    {
+      "timestamp": "2025-12-13T21:15:06.081023",
+      "endpoint": "active-fetch/FETCH_INTRAOP",
+      "category": "active_fetch"
+    },
+    {
+      "timestamp": "2025-12-13T21:15:06.168881",
+      "endpoint": "active-fetch/FETCH_POSTOP",
+      "category": "active_fetch"
+    },
+    {
+      "timestamp": "2025-12-13T21:15:06.531214",
+      "endpoint": "active-fetch/FETCH_INTRAOP",
+      "category": "active_fetch"
+    },
+    {
+      "timestamp": "2025-12-13T21:15:06.610464",
+      "endpoint": "active-fetch/FETCH_POSTOP",
+      "category": "active_fetch"
+    },
+    {
+      "timestamp": "2025-12-13T21:15:06.974758",
+      "endpoint": "active-fetch/FETCH_INTRAOP",
+      "category": "active_fetch"
+    },
+    {
+      "timestamp": "2025-12-13T21:15:07.018531",
+      "endpoint": "active-fetch/FETCH_POSTOP",
+      "category": "active_fetch"
+    },
+    {
+      "timestamp": "2025-12-13T21:15:07.557845",
+      "endpoint": "/{id}/65/ax/medications/persistence/chart_has_classic_coumad",
+      "category": "medication"
+    },
+    {
+      "timestamp": "2025-12-13T21:15:07.565706",
+      "endpoint": "/{id}/65/ax/data?sources=confidentiality_reason_options",
+      "category": "athena_data"
+    },
+    {
+      "timestamp": "2025-12-13T21:15:07.600139",
+      "endpoint": "/{id}/65/ax/data?sources=meds_not_reviewed_options",
+      "category": "medication"
+    },
+    {
+      "timestamp": "2025-12-13T21:15:07.620074",
+      "endpoint": "active-fetch/FETCH_POSTOP",
+      "category": "active_fetch"
+    },
+    {
+      "timestamp": "2025-12-13T21:15:07.626956",
+      "endpoint": "active-fetch/FETCH_INTRAOP",
+      "category": "active_fetch"
+    },
+    {
+      "timestamp": "2025-12-13T21:15:07.706553",
+      "endpoint": "/{id}/65/ax/data?sources=reasons_for_resources",
+      "category": "athena_data"
+    },
+    {
+      "timestamp": "2025-12-13T21:15:07.976538",
+      "endpoint": "/{id}/65/ax/data?sources=encounter_and_chart_security_labels",
+      "category": "lab"
+    },
+    {
+      "timestamp": "2025-12-13T21:15:08.018693",
+      "endpoint": "active-fetch/FETCH_INTRAOP",
+      "category": "active_fetch"
+    },
+    {
+      "timestamp": "2025-12-13T21:15:08.058628",
+      "endpoint": "/{id}/65/ax/data?sources=cached_words",
+      "category": "athena_data"
+    },
+    {
+      "timestamp": "2025-12-13T21:15:08.132027",
+      "endpoint": "active-fetch/FETCH_POSTOP",
+      "category": "active_fetch"
+    },
+    {
+      "timestamp": "2025-12-13T21:15:08.142047",
+      "endpoint": "/{id}/65/ax/medications/persistence/chart_has_classic_coumad",
+      "category": "medication"
+    },
+    {
+      "timestamp": "2025-12-13T21:15:08.297478",
+      "endpoint": "active-fetch/FETCH_INTRAOP",
+      "category": "active_fetch"
+    },
+    {
+      "timestamp": "2025-12-13T21:15:08.404125",
+      "endpoint": "active-fetch/FETCH_POSTOP",
+      "category": "active_fetch"
+    },
+    {
+      "timestamp": "2025-12-13T21:15:08.759745",
+      "endpoint": "active-fetch/FETCH_INTRAOP",
+      "category": "active_fetch"
+    },
+    {
+      "timestamp": "2025-12-13T21:15:08.858038",
+      "endpoint": "active-fetch/FETCH_POSTOP",
+      "category": "active_fetch"
+    },
+    {
+      "timestamp": "2025-12-13T21:15:09.197058",
+      "endpoint": "active-fetch/FETCH_INTRAOP",
+      "category": "active_fetch"
+    },
+    {
+      "timestamp": "2025-12-13T21:15:12.402144",
+      "endpoint": "/{id}/65/ax/data?sources=order_summaries_by_encounter",
+      "category": "procedure"
+    },
+    {
+      "timestamp": "2025-12-13T21:15:15.399408",
+      "endpoint": "/{id}/65/ax/data?sources=implant_history",
+      "category": "athena_data"
+    },
+    {
+      "timestamp": "2025-12-13T21:15:15.405801",
+      "endpoint": "/{id}/65/ax/data?sources=sci_review_data",
+      "category": "athena_data"
+    },
+    {
+      "timestamp": "2025-12-13T21:16:49.987245",
+      "endpoint": "/{id}/65/ax/data?sources=chart_timeline",
+      "category": "athena_data"
+    },
+    {
+      "timestamp": "2025-12-13T21:16:50.018540",
+      "endpoint": "/{id}/65/ax/documents/search/{id}?...",
+      "category": "document"
+    },
+    {
+      "timestamp": "2025-12-13T21:16:53.380609",
+      "endpoint": "/{id}/65/ax/data?sources=classic_document",
+      "category": "document"
+    },
+    {
+      "timestamp": "2025-12-13T21:16:53.436330",
+      "endpoint": "/{id}/65/ax/data?sources=hcc_config_hide_raf_weight",
+      "category": "vital"
+    },
+    {
+      "timestamp": "2025-12-13T21:16:53.445348",
+      "endpoint": "/{id}/65/ax/data?sources=imo_search_proxy_conf",
+      "category": "athena_data"
+    }
+  ]
+}

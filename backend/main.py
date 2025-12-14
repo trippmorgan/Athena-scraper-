@@ -25,6 +25,15 @@ from datetime import datetime
 from contextlib import asynccontextmanager
 from active_routes import router as active_router, set_main_cache
 from event_store import EventStore
+from event_indexer import EventIndexer, create_indexer, INDEXER_VERSION
+from clinical_interpreters import (
+    get_registry, interpret_event, get_interpreter_versions,
+    InterpreterRegistry
+)
+from ai_summarizer import (
+    get_summarizer, generate_context, generate_briefing,
+    generate_med_alert, ClinicalSummarizer, SummaryType
+)
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -103,7 +112,7 @@ logger = setup_logging()
 class ConnectionManager:
     """Manages WebSocket connections for Chrome extension and Frontend clients."""
 
-    def __init__(self, event_store: EventStore):
+    def __init__(self, event_store: EventStore, event_indexer: EventIndexer):
         # Active connections
         self.chrome_connections: List[WebSocket] = []
         self.frontend_connections: List[WebSocket] = []
@@ -122,16 +131,28 @@ class ConnectionManager:
             'payloads_received': 0,
             'payloads_processed': 0,
             'errors': 0,
-            'patients_cached': 0
+            'patients_cached': 0,
+            'events_indexed': 0
         }
 
         # Event store for raw and interpreted records
         self.event_store = event_store
 
+        # Event indexer (Layer 2) for classification
+        self.event_indexer = event_indexer
+
+        # Clinical interpreters (Layer 3) for extraction
+        self.interpreter_registry = get_registry()
+
+        # Interpreted clinical records cache (patient_id -> category -> records)
+        self.clinical_cache: Dict[str, Dict[str, List]] = {}
+
         # Endpoint tracking for discovery analysis
         self.endpoint_history: Dict[str, Dict] = {}  # URL pattern -> {count, methods, sizes, record_type}
 
         logger.info("ConnectionManager initialized")
+        logger.info(f"  Event Indexer: v{INDEXER_VERSION}")
+        logger.info(f"  Clinical Interpreters: {list(self.interpreter_registry.get_versions().keys())}")
 
     async def connect_chrome(self, websocket: WebSocket):
         """Accept and register a Chrome extension connection."""
@@ -223,12 +244,19 @@ class ConnectionManager:
             status = data.get('status')
             raw_timestamp = data.get('timestamp') or datetime.utcnow().isoformat()
             source = data.get('source', 'chrome_interceptor')
+
+            # Extract patient ID from multiple locations (active fetch includes it in _meta)
             raw_patient = data.get('patientId')
+            if not raw_patient and isinstance(payload, dict):
+                raw_patient = payload.get('patientId')
+                if not raw_patient and '_meta' in payload:
+                    raw_patient = payload.get('_meta', {}).get('chartId')
 
             logger.info("-" * 60)
             logger.info("INCOMING ATHENA PAYLOAD")
             logger.info(f"  Method: {method}")
             logger.info(f"  Endpoint: {endpoint[:80]}{'...' if len(endpoint) > 80 else ''}")
+            logger.info(f"  Patient ID (from payload): {raw_patient or 'none'}")
             logger.info(f"  Payload size: {payload_size} bytes")
             logger.debug(f"  Raw payload preview: {str(payload)[:200]}...")
 
@@ -278,14 +306,52 @@ class ConnectionManager:
             else:
                 logger.debug("  No patient ID in endpoint and no current context")
 
-            # Index interpreted record linked to raw event for provenance
-            await self.event_store.append_index_entry({
-                'event_id': raw_event['id'],
+            # Index event using Layer 2 Event Indexer (replaces simple append_index_entry)
+            # The indexer provides:
+            #   - More accurate clinical category classification
+            #   - Extraction hints for downstream interpreters
+            #   - Confidence scores for classification quality
+            #   - Source type detection (passive vs active fetch)
+            index_entry = await self.event_indexer.index_event({
+                'id': raw_event['id'],
+                'endpoint': endpoint,
+                'payload': payload,
                 'timestamp': raw_event['timestamp'],
                 'patient_id': patient_id or self.current_patient_id,
-                'record_type': record_type,
-                'endpoint': endpoint,
             })
+            self.stats['events_indexed'] += 1
+            logger.debug(f"  Indexed as: {index_entry.category}/{index_entry.subcategory or '-'} (conf={index_entry.confidence:.2f})")
+
+            # Layer 3: Clinical Interpretation
+            # Run interpreters on indexed events to extract clinical meaning
+            interpretation_results = self.interpreter_registry.interpret_event(
+                raw_event={'id': raw_event['id'], 'payload': payload, 'endpoint': endpoint},
+                index_entry=index_entry.to_dict()
+            )
+
+            # Cache interpreted results by patient and category
+            if interpretation_results and (patient_id or self.current_patient_id):
+                pid = patient_id or self.current_patient_id
+                if pid not in self.clinical_cache:
+                    self.clinical_cache[pid] = {'medication': [], 'problem': [], 'vital': [], 'allergy': []}
+
+                for result in interpretation_results:
+                    category = result.category
+                    if category in self.clinical_cache[pid]:
+                        self.clinical_cache[pid][category].extend(result.records)
+                        logger.info(f"  🔬 Interpreted {len(result.records)} {category}(s) for patient {pid}")
+
+                        # Broadcast clinical update to frontend
+                        await self.broadcast_to_frontend({
+                            "type": "CLINICAL_UPDATE",
+                            "data": {
+                                "patient_id": pid,
+                                "category": category,
+                                "records": result.records,
+                                "interpreter_version": result.interpreter_version,
+                                "confidence": result.confidence
+                            }
+                        })
 
             # Track endpoint for discovery analysis
             import re
@@ -520,11 +586,14 @@ class ConnectionManager:
         }
 
 
-# Event store for raw and interpreted payloads
+# Event store for raw and interpreted payloads (Layer 1)
 event_store = EventStore()
 
+# Event indexer for classification (Layer 2)
+event_indexer = create_indexer("data")
+
 # Global connection manager
-manager = ConnectionManager(event_store)
+manager = ConnectionManager(event_store, event_indexer)
 
 # ============================================================================
 # FASTAPI APPLICATION
@@ -622,11 +691,390 @@ async def raw_events(patient_id: Optional[str] = None, limit: int = 50):
 
 @app.get("/events/index")
 async def indexed_events(patient_id: Optional[str] = None, limit: int = 50):
-    """Return interpreter index entries linked to raw events."""
+    """Return interpreter index entries linked to raw events (legacy endpoint)."""
     return {
         "patient_id": patient_id,
         "limit": limit,
         "events": event_store.get_index(patient_id=patient_id, limit=limit),
+    }
+
+
+# ============================================================================
+# EVENT INDEXER ENDPOINTS (Layer 2)
+# ============================================================================
+
+@app.get("/index/query")
+async def query_index(
+    patient_id: Optional[str] = None,
+    category: Optional[str] = None,
+    source_type: Optional[str] = None,
+    min_confidence: float = 0.0,
+    limit: int = 100
+):
+    """
+    Query the Event Index with filters.
+
+    Filters:
+    - patient_id: Filter by patient
+    - category: medication, problem, vital, lab, allergy, compound, etc.
+    - source_type: passive_intercept, active_fetch
+    - min_confidence: Minimum classification confidence (0.0-1.0)
+    """
+    entries = event_indexer.query(
+        patient_id=patient_id,
+        category=category,
+        source_type=source_type,
+        min_confidence=min_confidence,
+        limit=limit
+    )
+    return {
+        "count": len(entries),
+        "filters": {
+            "patient_id": patient_id,
+            "category": category,
+            "source_type": source_type,
+            "min_confidence": min_confidence
+        },
+        "entries": entries
+    }
+
+
+@app.get("/index/stats")
+async def index_stats():
+    """
+    Get Event Indexer statistics by category.
+
+    Returns count of indexed events per clinical category,
+    useful for understanding data distribution.
+    """
+    category_stats = event_indexer.get_category_stats()
+    return {
+        "indexer_version": INDEXER_VERSION,
+        "total_indexed": sum(category_stats.values()),
+        "by_category": category_stats,
+        "events_indexed_this_session": manager.stats.get('events_indexed', 0)
+    }
+
+
+@app.post("/index/reindex")
+async def reindex_events(force: bool = False):
+    """
+    Reindex all raw events (batch reprocessing).
+
+    Use force=True to reindex events that already have entries
+    from the current indexer version.
+
+    This enables retrospective analysis when classification logic improves.
+    """
+    raw_path = Path("data/raw_events.jsonl")
+    stats = await event_indexer.reindex_all(raw_path, force=force)
+    return {
+        "status": "complete",
+        "indexer_version": INDEXER_VERSION,
+        "stats": stats
+    }
+
+
+# ============================================================================
+# CLINICAL INTERPRETER ENDPOINTS (Layer 3)
+# ============================================================================
+
+@app.get("/clinical/interpreters")
+async def list_interpreters():
+    """
+    List all registered clinical interpreters and their versions.
+    """
+    return {
+        "interpreters": get_interpreter_versions(),
+        "categories": list(get_interpreter_versions().keys())
+    }
+
+
+@app.get("/clinical/{patient_id}")
+async def get_clinical_data(patient_id: str, category: Optional[str] = None):
+    """
+    Get interpreted clinical data for a patient.
+
+    Args:
+        patient_id: Patient identifier
+        category: Optional filter by category (medication, problem, etc.)
+    """
+    if patient_id not in manager.clinical_cache:
+        return {
+            "patient_id": patient_id,
+            "error": "No clinical data found",
+            "available_patients": list(manager.clinical_cache.keys())
+        }
+
+    cache = manager.clinical_cache[patient_id]
+
+    if category:
+        if category not in cache:
+            return {
+                "patient_id": patient_id,
+                "category": category,
+                "error": f"No {category} data found",
+                "available_categories": list(cache.keys())
+            }
+        return {
+            "patient_id": patient_id,
+            "category": category,
+            "count": len(cache[category]),
+            "records": cache[category]
+        }
+
+    # Return all categories
+    return {
+        "patient_id": patient_id,
+        "categories": {
+            cat: {
+                "count": len(records),
+                "records": records
+            }
+            for cat, records in cache.items()
+        }
+    }
+
+
+@app.get("/clinical/{patient_id}/medications")
+async def get_medications(patient_id: str, antithrombotic_only: bool = False):
+    """
+    Get interpreted medications for a patient.
+
+    For vascular surgery workflow, use antithrombotic_only=true to filter
+    to critical perioperative medications.
+    """
+    if patient_id not in manager.clinical_cache:
+        return {"patient_id": patient_id, "error": "No clinical data found"}
+
+    meds = manager.clinical_cache[patient_id].get('medication', [])
+
+    if antithrombotic_only:
+        meds = [m for m in meds if m.get('is_antithrombotic', False)]
+
+    return {
+        "patient_id": patient_id,
+        "count": len(meds),
+        "antithrombotic_filter": antithrombotic_only,
+        "medications": meds
+    }
+
+
+@app.get("/clinical/{patient_id}/problems")
+async def get_problems(patient_id: str, vascular_only: bool = False):
+    """
+    Get interpreted problems/diagnoses for a patient.
+
+    For vascular surgery workflow, use vascular_only=true to filter
+    to vascular-relevant conditions.
+    """
+    if patient_id not in manager.clinical_cache:
+        return {"patient_id": patient_id, "error": "No clinical data found"}
+
+    problems = manager.clinical_cache[patient_id].get('problem', [])
+
+    if vascular_only:
+        problems = [p for p in problems if p.get('is_vascular', False) or p.get('is_cardiovascular_risk', False)]
+
+    return {
+        "patient_id": patient_id,
+        "count": len(problems),
+        "vascular_filter": vascular_only,
+        "problems": problems
+    }
+
+
+@app.get("/clinical/{patient_id}/summary")
+async def get_clinical_summary(patient_id: str):
+    """
+    Get a clinical summary for vascular surgery decision support.
+
+    Provides:
+    - Antithrombotic medications (critical for perioperative management)
+    - Vascular diagnoses
+    - Cardiovascular risk factors
+    """
+    if patient_id not in manager.clinical_cache:
+        return {"patient_id": patient_id, "error": "No clinical data found"}
+
+    cache = manager.clinical_cache[patient_id]
+    meds = cache.get('medication', [])
+    problems = cache.get('problem', [])
+
+    # Extract critical data for vascular surgery
+    antithrombotics = [m for m in meds if m.get('is_antithrombotic', False)]
+    vascular_dx = [p for p in problems if p.get('is_vascular', False)]
+    cv_risk_factors = [p for p in problems if p.get('is_cardiovascular_risk', False)]
+
+    return {
+        "patient_id": patient_id,
+        "summary": {
+            "antithrombotic_medications": {
+                "count": len(antithrombotics),
+                "items": [{"name": m['name'], "status": m.get('status', 'active')} for m in antithrombotics]
+            },
+            "vascular_diagnoses": {
+                "count": len(vascular_dx),
+                "items": [{"name": p['display_name'], "icd10": p.get('icd10_code')} for p in vascular_dx]
+            },
+            "cardiovascular_risk_factors": {
+                "count": len(cv_risk_factors),
+                "items": [{"name": p['display_name'], "icd10": p.get('icd10_code')} for p in cv_risk_factors]
+            }
+        },
+        "total_medications": len(meds),
+        "total_problems": len(problems)
+    }
+
+
+# ============================================================================
+# AI SUMMARIZER ENDPOINTS (Layer 4 - Clinical Intelligence)
+# ============================================================================
+
+@app.get("/ai/briefing/{patient_id}")
+async def get_surgical_briefing(patient_id: str):
+    """
+    Generate an AI-powered surgical briefing for the patient.
+
+    Provides:
+    - Antithrombotic status and management considerations
+    - Vascular diagnoses summary
+    - Cardiovascular risk assessment (RCRI-like)
+    - Critical alerts (CLI, high-risk conditions)
+    """
+    if patient_id not in manager.clinical_cache:
+        return {"patient_id": patient_id, "error": "No clinical data found"}
+
+    cache = manager.clinical_cache[patient_id]
+    meds = cache.get('medication', [])
+    problems = cache.get('problem', [])
+
+    # Generate clinical context
+    context = generate_context(patient_id, meds, problems)
+
+    # Generate briefing
+    briefing = generate_briefing(context)
+
+    return {
+        "patient_id": patient_id,
+        "briefing": briefing,
+        "context": context.to_dict(),
+        "generated_at": context.generated_at
+    }
+
+
+@app.get("/ai/med-alert/{patient_id}")
+async def get_medication_alert(patient_id: str):
+    """
+    Generate medication management alerts for surgical planning.
+
+    Focuses on antithrombotic management:
+    - Anticoagulants requiring hold periods
+    - Antiplatelets with specific recommendations
+    - Bridging considerations
+    """
+    if patient_id not in manager.clinical_cache:
+        return {"patient_id": patient_id, "error": "No clinical data found"}
+
+    cache = manager.clinical_cache[patient_id]
+    meds = cache.get('medication', [])
+    problems = cache.get('problem', [])
+
+    context = generate_context(patient_id, meds, problems)
+    alert = generate_med_alert(context)
+
+    return {
+        "patient_id": patient_id,
+        "alert": alert,
+        "antithrombotic_count": len(context.antithrombotics),
+        "anticoagulants": [m['name'] for m in context.anticoagulants],
+        "antiplatelets": [m['name'] for m in context.antiplatelets]
+    }
+
+
+@app.get("/ai/context/{patient_id}")
+async def get_clinical_context(patient_id: str, format: str = "json"):
+    """
+    Generate structured clinical context for LLM integration.
+
+    Args:
+        patient_id: Patient identifier
+        format: Output format - "json" or "prompt"
+
+    The "prompt" format returns text ready to paste into Claude/GPT.
+    """
+    if patient_id not in manager.clinical_cache:
+        return {"patient_id": patient_id, "error": "No clinical data found"}
+
+    cache = manager.clinical_cache[patient_id]
+    meds = cache.get('medication', [])
+    problems = cache.get('problem', [])
+
+    context = generate_context(patient_id, meds, problems)
+
+    if format == "prompt":
+        return {
+            "patient_id": patient_id,
+            "prompt": context.to_prompt(),
+            "format": "prompt"
+        }
+
+    return {
+        "patient_id": patient_id,
+        "context": context.to_dict(),
+        "format": "json"
+    }
+
+
+@app.get("/ai/risk/{patient_id}")
+async def get_risk_assessment(patient_id: str):
+    """
+    Generate cardiovascular risk assessment for surgical planning.
+
+    Based on RCRI-like criteria:
+    - High-risk surgery
+    - Ischemic heart disease
+    - Heart failure
+    - Cerebrovascular disease
+    - Diabetes
+    - Renal insufficiency
+    """
+    if patient_id not in manager.clinical_cache:
+        return {"patient_id": patient_id, "error": "No clinical data found"}
+
+    cache = manager.clinical_cache[patient_id]
+    meds = cache.get('medication', [])
+    problems = cache.get('problem', [])
+
+    context = generate_context(patient_id, meds, problems)
+
+    # Calculate risk score
+    risk_factors = []
+    if context.has_cad:
+        risk_factors.append({"factor": "Coronary Artery Disease", "present": True})
+    if context.has_chf:
+        risk_factors.append({"factor": "Heart Failure", "present": True})
+    if context.has_stroke_history:
+        risk_factors.append({"factor": "Cerebrovascular Disease", "present": True})
+    if context.has_diabetes:
+        risk_factors.append({"factor": "Diabetes", "present": True})
+    if context.has_ckd:
+        risk_factors.append({"factor": "Renal Insufficiency", "present": True})
+
+    risk_count = len(risk_factors)
+    risk_level = "HIGH" if risk_count >= 3 else "MODERATE" if risk_count >= 1 else "LOW"
+
+    return {
+        "patient_id": patient_id,
+        "risk_level": risk_level,
+        "risk_score": risk_count,
+        "max_score": 5,
+        "risk_factors": risk_factors,
+        "vascular_status": {
+            "pad": context.pad_present,
+            "claudication": context.claudication,
+            "critical_limb_ischemia": context.critical_limb_ischemia
+        }
     }
 
 
@@ -703,15 +1151,22 @@ async def ingest_payload(request: Request, x_source: Optional[str] = Header(None
         url = body.get('url', '')
         method = body.get('method', 'GET')
         data = body.get('data', {})
-        patient_id = body.get('patientId')
         source = body.get('source', 'unknown')
         timestamp = body.get('timestamp', datetime.now().isoformat())
         size = body.get('size', 0)
 
+        # Extract patient ID from multiple possible locations
+        # Priority: body.patientId > data.patientId > data._meta.chartId > URL extraction
+        patient_id = body.get('patientId')
+        if not patient_id and isinstance(data, dict):
+            patient_id = data.get('patientId')
+            if not patient_id and '_meta' in data:
+                patient_id = data.get('_meta', {}).get('chartId')
+
         logger.info(f"  Method: {method}")
         logger.info(f"  URL: {url[:100]}{'...' if len(url) > 100 else ''}")
         logger.info(f"  Source: {source}")
-        logger.info(f"  Patient ID from extension: {patient_id or 'none'}")
+        logger.info(f"  Patient ID extracted: {patient_id or 'none'}")
         logger.info(f"  Size: {size} bytes")
         logger.info(f"  Data type: {type(data).__name__}")
         if isinstance(data, dict):
@@ -732,11 +1187,17 @@ async def ingest_payload(request: Request, x_source: Optional[str] = Header(None
         internal_payload = {
             'endpoint': url,
             'method': method,
-            'payload': data
+            'payload': data,
+            'patientId': patient_id  # Include extracted patient ID
         }
 
         # Process through the same pipeline as WebSocket
         await manager.process_athena_payload(internal_payload)
+
+        # If we have a patient ID from active fetch, set it as current context
+        if patient_id and source == 'active-fetch':
+            manager.current_patient_id = patient_id
+            logger.info(f"  Set current patient context to: {patient_id}")
 
         # Notify frontend that Chrome is active
         await manager.broadcast_to_frontend({
