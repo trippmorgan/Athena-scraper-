@@ -382,5 +382,95 @@ async def clear_profile(patient_id: str):
         removed = True
     if patient_id in active_fetch_cache:
         del active_fetch_cache[patient_id]
-    
+
     return {"removed": removed, "patient_id": patient_id}
+
+
+@router.get("/raw-cache/{patient_id}")
+async def get_raw_cache(patient_id: str):
+    """
+    Return ALL cached raw data for a patient.
+    This is the complete dump of everything we've captured -
+    useful for debugging and frontend searching.
+    """
+    result = {
+        "patient_id": patient_id,
+        "found_in_caches": [],
+        "main_cache": None,
+        "active_fetch_cache": None,
+        "summary": {}
+    }
+
+    # Check main patient cache (from passive intercept + active fetch)
+    if patient_id in main_patient_cache:
+        result["found_in_caches"].append("main_patient_cache")
+        cache = main_patient_cache[patient_id]
+        result["main_cache"] = cache
+
+        # Build summary
+        result["summary"]["patient"] = bool(cache.get("patient"))
+        result["summary"]["vitals"] = bool(cache.get("vitals"))
+        result["summary"]["medications_count"] = len(cache.get("medications", []))
+        result["summary"]["problems_count"] = len(cache.get("problems", []))
+        result["summary"]["labs_count"] = len(cache.get("labs", []))
+        result["summary"]["allergies_count"] = len(cache.get("allergies", []))
+        result["summary"]["notes_count"] = len(cache.get("notes", []))
+        result["summary"]["documents_count"] = len(cache.get("documents", []))
+        result["summary"]["unknown_count"] = len(cache.get("unknown", []))
+
+    # Check active fetch cache
+    if patient_id in active_fetch_cache:
+        result["found_in_caches"].append("active_fetch_cache")
+        result["active_fetch_cache"] = active_fetch_cache[patient_id]
+
+    if not result["found_in_caches"]:
+        result["error"] = "Patient not found in any cache. Navigate to patient chart in Athena first."
+        result["available_patients"] = {
+            "main_cache": list(main_patient_cache.keys()),
+            "active_fetch": list(active_fetch_cache.keys())
+        }
+
+    return result
+
+
+@router.get("/search/{patient_id}")
+async def search_patient_data(patient_id: str, q: str = ""):
+    """
+    Search all cached patient data for a query string.
+    Returns matching items across all data categories.
+    """
+    if patient_id not in main_patient_cache:
+        raise HTTPException(status_code=404, detail="Patient not found in cache")
+
+    cache = main_patient_cache[patient_id]
+    query = q.lower()
+    results = {"query": q, "matches": {}}
+
+    def search_in_list(items: list, category: str):
+        matches = []
+        for item in items:
+            item_str = str(item).lower()
+            if query in item_str:
+                matches.append(item)
+        if matches:
+            results["matches"][category] = matches
+
+    def search_in_dict(data: dict, category: str):
+        if data:
+            data_str = str(data).lower()
+            if query in data_str:
+                results["matches"][category] = data
+
+    # Search all categories
+    search_in_dict(cache.get("patient"), "patient")
+    search_in_dict(cache.get("vitals"), "vitals")
+    search_in_list(cache.get("medications", []), "medications")
+    search_in_list(cache.get("problems", []), "problems")
+    search_in_list(cache.get("labs", []), "labs")
+    search_in_list(cache.get("allergies", []), "allergies")
+    search_in_list(cache.get("notes", []), "notes")
+    search_in_list(cache.get("documents", []), "documents")
+    search_in_list(cache.get("unknown", []), "unknown")
+
+    results["total_categories_matched"] = len(results["matches"])
+    return results

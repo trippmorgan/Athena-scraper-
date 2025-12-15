@@ -599,50 +599,112 @@ def convert_to_fhir(endpoint: str, method: str, payload: Any) -> Tuple[str, Any]
 
     # For compound payloads (from active fetch or multi-source requests)
     if record_type == 'compound' and isinstance(payload, dict):
-        logger.info(f"[FHIR] Processing COMPOUND payload with keys: {list(payload.keys())[:10]}")
+        logger.info("=" * 50)
+        logger.info(f"[FHIR] 🔄 COMPOUND PAYLOAD PROCESSING")
+        logger.info(f"[FHIR] Top-level keys: {list(payload.keys())}")
         result = {'_compound': True}
 
-        # Handle both standard keys and nested structures from active fetch
-        # Active fetch may return: {medications: {success: true, data: [...]}, ...}
+        # CRITICAL: Chrome extension wraps data in 'raw' key
+        # Structure: {raw: {patientId, demographics, active_problems, ...}, surgical: {...}}
+        raw_data = payload.get('raw', {})
+        if raw_data:
+            logger.info(f"[FHIR] ✅ Found 'raw' wrapper!")
+            logger.info(f"[FHIR] Raw data keys: {list(raw_data.keys())}")
+            # Log status of each key in raw
+            for key in raw_data.keys():
+                val = raw_data[key]
+                if isinstance(val, dict):
+                    if val.get('success') == False:
+                        logger.warning(f"[FHIR]   ❌ {key}: FAILED - {val.get('error', 'unknown')}")
+                    elif val.get('success') == True:
+                        data = val.get('data')
+                        if isinstance(data, list):
+                            logger.info(f"[FHIR]   ✅ {key}: SUCCESS - {len(data)} items")
+                        else:
+                            logger.info(f"[FHIR]   ✅ {key}: SUCCESS - {type(data).__name__}")
+                    else:
+                        logger.info(f"[FHIR]   📄 {key}: dict with keys {list(val.keys())[:5]}")
+                elif isinstance(val, str):
+                    logger.info(f"[FHIR]   📝 {key}: {val[:50]}...")
+                else:
+                    logger.info(f"[FHIR]   📦 {key}: {type(val).__name__}")
+        else:
+            logger.warning("[FHIR] ⚠️ No 'raw' wrapper found in compound payload")
 
-        # Extract medications
-        meds_data = _extract_nested_data(payload, ['medications', 'activeMedications', 'active_medications'])
+        # Use raw_data if available, otherwise fall back to payload
+        data_source = raw_data if raw_data else payload
+
+        # Extract medications - check both raw and top level
+        meds_data = _extract_nested_data(data_source, ['medications', 'activeMedications', 'active_medications'])
+        if not meds_data:
+            meds_data = _extract_nested_data(payload, ['medications', 'activeMedications', 'active_medications'])
         if meds_data:
             converted_meds = convert_medications(meds_data)
             result['medications'] = [m.dict() for m in converted_meds]
             logger.info(f"[FHIR] Extracted {len(result['medications'])} medications from compound")
 
-        # Extract problems/conditions
-        probs_data = _extract_nested_data(payload, ['problems', 'activeProblems', 'active_problems', 'conditions'])
+        # Extract problems/conditions - check both raw and top level
+        probs_data = _extract_nested_data(data_source, ['problems', 'activeProblems', 'active_problems', 'conditions'])
+        if not probs_data:
+            probs_data = _extract_nested_data(payload, ['problems', 'activeProblems', 'active_problems', 'conditions'])
         if probs_data:
             converted_probs = convert_problems(probs_data)
             result['conditions'] = [c.dict() for c in converted_probs]
             logger.info(f"[FHIR] Extracted {len(result['conditions'])} conditions from compound")
 
-        # Extract vitals
-        vitals_data = _extract_nested_data(payload, ['vitals', 'measurements'])
+        # Extract vitals - check both raw and top level
+        vitals_data = _extract_nested_data(data_source, ['vitals', 'measurements'])
+        if not vitals_data:
+            vitals_data = _extract_nested_data(payload, ['vitals', 'measurements'])
         if vitals_data:
             result['vitals'] = convert_vitals(vitals_data)
             logger.info(f"[FHIR] Extracted vitals from compound")
 
-        # Extract allergies
-        allergies_data = _extract_nested_data(payload, ['allergies', 'allergy'])
+        # Extract allergies - check both raw and top level
+        allergies_data = _extract_nested_data(data_source, ['allergies', 'allergy'])
+        if not allergies_data:
+            allergies_data = _extract_nested_data(payload, ['allergies', 'allergy'])
         if allergies_data:
             result['allergies'] = allergies_data
             logger.info(f"[FHIR] Extracted allergies from compound")
 
-        # Extract labs
-        labs_data = _extract_nested_data(payload, ['labs', 'labResults', 'lab_results'])
+        # Extract labs - check both raw and top level
+        labs_data = _extract_nested_data(data_source, ['labs', 'labResults', 'lab_results'])
+        if not labs_data:
+            labs_data = _extract_nested_data(payload, ['labs', 'labResults', 'lab_results'])
         if labs_data:
             result['labs'] = labs_data
             logger.info(f"[FHIR] Extracted labs from compound")
 
-        # Extract demographics/patient info
-        demo_data = _extract_nested_data(payload, ['demographics', 'patient', 'patientInfo'])
+        # Extract demographics/patient info - check both raw and top level
+        demo_data = _extract_nested_data(data_source, ['demographics', 'patient', 'patientInfo'])
+        if not demo_data:
+            demo_data = _extract_nested_data(payload, ['demographics', 'patient', 'patientInfo'])
         if demo_data:
-            patient_id = payload.get('patientId') or payload.get('_meta', {}).get('chartId')
+            # Get patient ID from multiple sources
+            patient_id = (raw_data.get('patientId') or
+                         raw_data.get('_meta', {}).get('chartId') or
+                         payload.get('patientId') or
+                         payload.get('_meta', {}).get('chartId'))
             result['patient'] = convert_patient(demo_data, patient_id)
             logger.info(f"[FHIR] Extracted demographics from compound")
+
+        # Log summary of what we found
+        logger.info("=" * 50)
+        logger.info(f"[FHIR] 📊 COMPOUND EXTRACTION SUMMARY:")
+        for key in ['medications', 'conditions', 'vitals', 'allergies', 'labs', 'patient']:
+            val = result.get(key)
+            if val:
+                if isinstance(val, list):
+                    logger.info(f"[FHIR]   ✅ {key}: {len(val)} items extracted")
+                else:
+                    logger.info(f"[FHIR]   ✅ {key}: extracted")
+            else:
+                logger.warning(f"[FHIR]   ❌ {key}: NOT extracted")
+
+        found_types = [k for k in ['medications', 'conditions', 'vitals', 'allergies', 'labs', 'patient'] if result.get(k)]
+        logger.info(f"[FHIR] 🏁 COMPOUND complete. Total types: {len(found_types)}")
+        logger.info("=" * 50)
 
         return 'compound', result
 
@@ -686,38 +748,71 @@ def _extract_nested_data(payload: dict, key_options: list) -> Any:
     - Nested: payload['medications'] = {'success': True, 'data': [...]}
     - Athena: payload['medications'] = {'active_medications': {'Medications': [...]}}
     """
+    logger.debug(f"[FHIR] _extract_nested_data looking for keys: {key_options} in payload keys: {list(payload.keys())[:15]}")
+
     for key in key_options:
         if key in payload:
             value = payload[key]
+            logger.debug(f"[FHIR] Found key '{key}', value type: {type(value).__name__}")
 
             # Skip failed responses
             if isinstance(value, dict):
                 if value.get('success') == False:
-                    logger.debug(f"[FHIR] Skipping failed response for key: {key}")
+                    logger.warning(f"[FHIR] Skipping FAILED response for key: {key} - error: {value.get('error', 'unknown')}")
                     continue
 
                 # Handle {success: true, data: [...]} structure
                 if 'data' in value:
-                    return value['data']
+                    data = value['data']
+                    logger.info(f"[FHIR] Extracted from {key}.data: {len(data) if isinstance(data, list) else 'dict'}")
+                    return data
 
-                # Handle nested Athena structures
+                # Handle nested Athena structures with capital letters
                 if 'active_medications' in value:
                     inner = value['active_medications']
-                    return inner.get('Medications') or inner.get('medications') or inner
+                    result = inner.get('Medications') or inner.get('medications') or inner
+                    logger.info(f"[FHIR] Extracted from {key}.active_medications: {len(result) if isinstance(result, list) else 'dict'}")
+                    return result
                 if 'active_problems' in value:
                     inner = value['active_problems']
-                    return inner.get('Problems') or inner.get('problems') or inner
+                    result = inner.get('Problems') or inner.get('problems') or inner
+                    logger.info(f"[FHIR] Extracted from {key}.active_problems: {len(result) if isinstance(result, list) else 'dict'}")
+                    return result
                 if 'allergies' in value and isinstance(value['allergies'], (list, dict)):
+                    logger.info(f"[FHIR] Extracted from {key}.allergies")
                     return value['allergies']
+
+                # Check for Athena's PascalCase keys at top level
+                if 'Problems' in value:
+                    result = value['Problems']
+                    logger.info(f"[FHIR] Extracted from {key}.Problems: {len(result) if isinstance(result, list) else 'dict'}")
+                    return result
+                if 'Medications' in value:
+                    result = value['Medications']
+                    logger.info(f"[FHIR] Extracted from {key}.Medications: {len(result) if isinstance(result, list) else 'dict'}")
+                    return result
+
+                # Handle IMO Health categorized format: {'categories': [{'problems': [...]}]}
+                if 'categories' in value:
+                    all_items = []
+                    for cat in value.get('categories', []):
+                        items = cat.get('problems', []) or cat.get('medications', []) or cat.get('allergies', [])
+                        all_items.extend(items)
+                    if all_items:
+                        logger.info(f"[FHIR] Extracted from {key}.categories: {len(all_items)} items")
+                        return all_items
 
                 # Return dict as-is if it has meaningful data
                 if value and not value.get('error'):
+                    logger.debug(f"[FHIR] Returning {key} dict as-is")
                     return value
 
             # Direct list or other value
             if value:
+                logger.info(f"[FHIR] Direct value from {key}: {len(value) if isinstance(value, list) else type(value).__name__}")
                 return value
 
+    logger.debug(f"[FHIR] No data found for keys: {key_options}")
     return None
 
 

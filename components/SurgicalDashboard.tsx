@@ -1,8 +1,10 @@
+import { NarrativeCard } from './NarrativeCard';
+import { RawDataViewer } from './RawDataViewer';
 import React, { useState, useEffect } from 'react';
 import { 
   Search, AlertTriangle, CheckCircle2, XCircle, Clock, 
   Pill, Heart, Droplets, FileText, Activity, Syringe,
-  AlertOctagon, Stethoscope, Scissors, ClipboardList
+  AlertOctagon, Stethoscope, Scissors, ClipboardList, Trash2
 } from 'lucide-react';
 
 // Types
@@ -15,11 +17,19 @@ interface AntithromboticMed {
   reversal_agent?: string;
 }
 
+interface Diagnosis {
+  name: string;
+  icd10_code?: string;
+  status: string;
+  onset_date?: string;
+}
+
 interface VascularProfile {
   patient_id: string;
   mrn: string;
   name: string;
   antithrombotics: AntithromboticMed[];
+  diagnoses: Diagnosis[];
   renal_function?: {
     creatinine?: number;
     egfr?: number;
@@ -84,6 +94,16 @@ export const SurgicalDashboard: React.FC<SurgicalDashboardProps> = ({ onSearch }
   const [profile, setProfile] = useState<VascularProfile | null>(null);
   const [checklist, setChecklist] = useState<PreOpChecklist | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [clearCacheStatus, setClearCacheStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    console.log('[SurgicalDashboard] Profile state updated:', profile);
+    if (profile) {
+      console.log('[SurgicalDashboard] Rendering RawDataViewer with patientId:', profile.patient_id ?? mrn);
+    } else {
+      console.log('[SurgicalDashboard] Profile is null, RawDataViewer will not be rendered.');
+    }
+  }, [profile, mrn]);
 
   const fetchProfile = async (patientId: string): Promise<VascularProfile | null> => {
     try {
@@ -120,14 +140,18 @@ export const SurgicalDashboard: React.FC<SurgicalDashboardProps> = ({ onSearch }
   const handleSearch = async () => {
     if (!mrn.trim()) return;
 
+    console.log(`[SurgicalDashboard] handleSearch called for MRN: ${mrn}`);
     setLoading(true);
     setError(null);
+    setClearCacheStatus(null);
     setProfile(null);
     setChecklist(null);
+    console.log('[SurgicalDashboard] Profile and checklist cleared, loading started.');
 
     try {
       // Trigger active fetch via extension (if available)
       if (onSearch) {
+        console.log('[SurgicalDashboard] Calling onSearch prop to trigger active fetch.');
         onSearch(mrn);
       }
 
@@ -139,26 +163,53 @@ export const SurgicalDashboard: React.FC<SurgicalDashboardProps> = ({ onSearch }
 
       const pollForData = async (): Promise<void> => {
         attempts++;
-        console.log(`Poll attempt ${attempts}/${maxAttempts} for MRN: ${mrn}`);
+        console.log(`[SurgicalDashboard] Poll attempt ${attempts}/${maxAttempts} for MRN: ${mrn}`);
 
         foundProfile = await fetchProfile(mrn);
         await fetchChecklist(mrn);
 
         // Check the RETURNED value, not stale state
         if (foundProfile || attempts >= maxAttempts) {
+          console.log(`[SurgicalDashboard] Polling finished. Found profile:`, foundProfile);
           setLoading(false);
           if (!foundProfile && attempts >= maxAttempts) {
-            setError('No profile found. Navigate to patient chart in Athena first, then try again.');
+            const errorMsg = 'No profile found. Navigate to patient chart in Athena first, then try again.';
+            console.error('[SurgicalDashboard] Max poll attempts reached without finding profile.');
+            setError(errorMsg);
           }
         } else {
           // Keep polling
+          console.log('[SurgicalDashboard] Profile not found yet, polling again in ' + pollInterval + 'ms');
           setTimeout(pollForData, pollInterval);
         }
       };
 
       await pollForData();
     } catch (e) {
-      setError('Failed to fetch patient data');
+      const errorMsg = 'Failed to fetch patient data';
+      console.error(`[SurgicalDashboard] Error in handleSearch:`, e);
+      setError(errorMsg);
+      setLoading(false);
+    }
+  };
+
+  const handleClearCache = async () => {
+    setLoading(true);
+    setError(null);
+    setClearCacheStatus(null);
+    try {
+      const res = await fetch(`${API_BASE}/cache`, { method: 'DELETE' });
+      const data = await res.json();
+      console.log('Clear cache response:', data);
+      setClearCacheStatus(`${data.patients_removed} patient(s) removed from cache.`);
+      // Clear local state
+      setProfile(null);
+      setChecklist(null);
+      setMrn('');
+    } catch (e) {
+      console.error('Failed to clear cache:', e);
+      setError('Failed to clear backend cache.');
+    } finally {
       setLoading(false);
     }
   };
@@ -207,6 +258,14 @@ export const SurgicalDashboard: React.FC<SurgicalDashboardProps> = ({ onSearch }
           >
             {loading ? 'Fetching...' : 'Fetch Patient'}
           </button>
+          <button
+            onClick={handleClearCache}
+            disabled={loading}
+            className="p-2.5 bg-red-800 hover:bg-red-700 disabled:bg-slate-700 rounded-lg"
+            title="Clear Backend Cache"
+          >
+            <Trash2 size={18} />
+          </button>
         </div>
 
         {/* Phase Tabs */}
@@ -237,6 +296,11 @@ export const SurgicalDashboard: React.FC<SurgicalDashboardProps> = ({ onSearch }
             {error}
           </div>
         )}
+        {clearCacheStatus && (
+          <div className="mb-4 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg text-blue-400">
+            {clearCacheStatus}
+          </div>
+        )}
 
         {!profile && !loading && (
           <div className="flex flex-col items-center justify-center h-64 text-slate-500">
@@ -252,7 +316,6 @@ export const SurgicalDashboard: React.FC<SurgicalDashboardProps> = ({ onSearch }
             <p className="mt-4 text-slate-400">Fetching patient data from Athena...</p>
           </div>
         )}
-
         {/* PRE-OP VIEW */}
         {profile && activePhase === 'preop' && (
           <div className="space-y-4">
@@ -277,6 +340,9 @@ export const SurgicalDashboard: React.FC<SurgicalDashboardProps> = ({ onSearch }
                 </div>
               </div>
             </div>
+
+            {/* Narrative Summary */}
+            <NarrativeCard patientId={profile.patient_id ?? mrn} />
 
             {/* Checklist Status */}
             {checklist && (
@@ -332,6 +398,40 @@ export const SurgicalDashboard: React.FC<SurgicalDashboardProps> = ({ onSearch }
                 </div>
               ) : (
                 <p className="text-slate-500">No antithrombotics on record</p>
+              )}
+            </div>
+
+            {/* Diagnoses/Problems */}
+            <div className="bg-slate-900 rounded-lg p-4 border border-slate-800">
+              <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-300 mb-3">
+                <ClipboardList size={16} className="text-cyan-400" />
+                DIAGNOSES / ACTIVE PROBLEMS
+                {profile.diagnoses?.length > 0 && (
+                  <span className="ml-auto text-xs px-2 py-0.5 bg-cyan-500/20 text-cyan-400 rounded">
+                    {profile.diagnoses.length} total
+                  </span>
+                )}
+              </h3>
+              {profile.diagnoses?.length > 0 ? (
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {profile.diagnoses.map((dx, i) => (
+                    <div key={i} className="flex justify-between items-start p-2 bg-slate-800/50 rounded-lg">
+                      <div className="flex-1">
+                        <span className="font-medium text-white text-sm">{dx.name}</span>
+                        {dx.onset_date && (
+                          <span className="text-slate-500 text-xs ml-2">({dx.onset_date})</span>
+                        )}
+                      </div>
+                      {dx.icd10_code && (
+                        <span className="ml-2 px-2 py-0.5 text-xs bg-cyan-500/20 text-cyan-400 rounded font-mono">
+                          {dx.icd10_code}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-slate-500">No diagnoses on record</p>
               )}
             </div>
 
@@ -441,6 +541,9 @@ export const SurgicalDashboard: React.FC<SurgicalDashboardProps> = ({ onSearch }
                 </div>
               </div>
             )}
+
+            {/* Raw Data Cache - Debug & Search */}
+            <RawDataViewer patientId={profile.patient_id ?? mrn} />
           </div>
         )}
 

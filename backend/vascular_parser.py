@@ -78,27 +78,38 @@ class CriticalAllergy(BaseModel):
     surgical_implication: Optional[str] = None
 
 
+class Diagnosis(BaseModel):
+    """A patient diagnosis/problem with ICD-10 code."""
+    name: str
+    icd10_code: Optional[str] = None
+    status: str = "active"  # active, resolved, etc.
+    onset_date: Optional[str] = None
+
+
 class VascularProfile(BaseModel):
     """Complete vascular surgery profile for a patient."""
     patient_id: str
     mrn: str
     name: str
-    
+
     # Pre-op critical data
     antithrombotics: List[AntithromboticMed] = []
     renal_function: Optional[RenalFunction] = None
     coagulation: Optional[CoagulationPanel] = None
     cardiac_clearance: Optional[CardiacClearance] = None
     critical_allergies: List[CriticalAllergy] = []
-    
+
+    # Diagnoses/Problems - ALL active problems for the patient
+    diagnoses: List[Diagnosis] = []
+
     # Surgical history
     vascular_history: List[VascularHistory] = []
-    
+
     # Risk flags
     high_bleeding_risk: bool = False
     contrast_caution: bool = False
     cardiac_risk: str = "unknown"
-    
+
     # Raw data references
     last_updated: str = Field(default_factory=lambda: datetime.now().isoformat())
 
@@ -391,6 +402,56 @@ def parse_vascular_history(procedures: List[Any], notes: List[Any] = None, probl
     return results
 
 
+def parse_diagnoses(problems: List[Any]) -> List[Diagnosis]:
+    """Extract all diagnoses/problems with ICD-10 codes."""
+    results = []
+
+    for prob in problems:
+        if not prob:
+            continue
+
+        # Handle various data structures
+        if isinstance(prob, dict):
+            # Try multiple possible field names for the diagnosis name
+            name = (prob.get("description") or prob.get("name") or
+                    prob.get("display") or prob.get("display_name") or
+                    prob.get("problemName") or prob.get("conditionName") or
+                    prob.get("diagnosisName") or "Unknown")
+
+            # Try multiple possible field names for ICD-10 code
+            icd10 = (prob.get("icd10Code") or prob.get("icd10") or
+                     prob.get("code") or prob.get("diagnosisCode") or
+                     prob.get("snomedCode") or None)
+
+            # Try to get status
+            status = (prob.get("status") or prob.get("clinicalStatus") or
+                      prob.get("problemStatus") or "active")
+
+            # Try to get onset date
+            onset = (prob.get("onsetDate") or prob.get("startDate") or
+                     prob.get("dateOfOnset") or prob.get("diagnosedDate") or None)
+        elif isinstance(prob, str):
+            name = prob
+            icd10 = None
+            status = "active"
+            onset = None
+        else:
+            continue
+
+        # Skip empty names
+        if not name or name == "Unknown":
+            continue
+
+        results.append(Diagnosis(
+            name=str(name),
+            icd10_code=str(icd10) if icd10 else None,
+            status=str(status).lower(),
+            onset_date=str(onset) if onset else None
+        ))
+
+    return results
+
+
 # ============================================================
 # MAIN PARSER
 # ============================================================
@@ -434,8 +495,14 @@ def build_vascular_profile(patient_id: str, raw_data: Dict[str, Any]) -> Vascula
     # Parse procedures and problems for vascular history
     proc_data = raw_data.get("procedures", {}).get("data", [])
     problems_data = raw_data.get("problems", {}).get("data", [])
+    if isinstance(problems_data, dict):
+        problems_data = problems_data.get("problems", []) or problems_data.get("activeProblems", [])
     # Include problems as potential vascular diagnoses
     history = parse_vascular_history(proc_data, notes_data, problems_data)
+
+    # Parse ALL diagnoses/problems (not just vascular-related)
+    diagnoses = parse_diagnoses(problems_data)
+    logger.info(f"Parsed {len(diagnoses)} diagnoses from problems data")
     
     # Determine risk flags (ensure bool, not None)
     high_bleeding_risk = bool(
@@ -469,13 +536,15 @@ def build_vascular_profile(patient_id: str, raw_data: Dict[str, Any]) -> Vascula
         coagulation=coag,
         cardiac_clearance=cardiac,
         critical_allergies=allergies,
+        diagnoses=diagnoses,
         vascular_history=history,
         high_bleeding_risk=high_bleeding_risk,
         contrast_caution=contrast_caution,
         cardiac_risk=cardiac_risk
     )
-    
+
     logger.info(f"Vascular profile built: {len(antithrombotics)} antithrombotics, "
-                f"{len(allergies)} critical allergies, {len(history)} prior procedures")
+                f"{len(allergies)} critical allergies, {len(history)} prior procedures, "
+                f"{len(diagnoses)} diagnoses")
     
     return profile

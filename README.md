@@ -55,6 +55,7 @@ python main.py
 
 # 6. Start frontend (optional)
 cd ../frontend && npm install && npm run dev
+ 
 ```
 
 ---

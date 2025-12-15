@@ -20,12 +20,15 @@ import asyncio
 import json
 import logging
 import sys
+from logging.handlers import TimedRotatingFileHandler
+from pythonjsonlogger import jsonlogger
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 from contextlib import asynccontextmanager
 from active_routes import router as active_router, set_main_cache
 from event_store import EventStore
 from event_indexer import EventIndexer, create_indexer, INDEXER_VERSION
+from narrative_engine import get_narrative_engine, NarrativeRequest
 from clinical_interpreters import (
     get_registry, interpret_event, get_interpreter_versions,
     InterpreterRegistry
@@ -60,6 +63,7 @@ from fhir_converter import (
     convert_to_fhir, extract_patient_id, create_log_entry,
     build_patient_from_aggregated_data
 )
+
 # ============================================================================
 # LOGGING CONFIGURATION
 # ============================================================================
@@ -82,6 +86,9 @@ class ColoredFormatter(logging.Formatter):
         color = self.COLORS.get(record.levelname, self.RESET)
         record.levelname = f"{color}{self.BOLD}{record.levelname}{self.RESET}"
         record.msg = f"{color}{record.msg}{self.RESET}"
+        # Make sure standard formatter runs on a string
+        if hasattr(record, 'msg') and not isinstance(record.msg, str):
+            record.msg = str(record.msg)
         return super().format(record)
 
 # Configure root logger
@@ -95,9 +102,9 @@ def setup_logging():
     # Clear existing handlers
     logger.handlers = []
 
-    # Console handler with colors
+    # Console handler with colors for readability during development
     console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(logging.DEBUG)
+    console_handler.setLevel(logging.INFO) # Keep console less verbose
     console_formatter = ColoredFormatter(
         '%(asctime)s | %(levelname)s | [%(name)s] %(message)s',
         datefmt='%H:%M:%S'
@@ -105,15 +112,32 @@ def setup_logging():
     console_handler.setFormatter(console_formatter)
     logger.addHandler(console_handler)
 
-    # File handler for persistent logs
-    file_handler = logging.FileHandler('shadow_ehr.log', mode='a')
-    file_handler.setLevel(logging.DEBUG)
-    file_formatter = logging.Formatter(
+    # Rotating file handler for persistent, structured JSON logs
+    # Rotates daily, keeps 7 days of logs.
+    log_file = "shadow_ehr.log"
+    file_handler = TimedRotatingFileHandler(
+        log_file, when="midnight", interval=1, backupCount=7, encoding='utf-8'
+    )
+    file_handler.setLevel(logging.DEBUG) # Full verbosity for file logs
+
+    # Use a custom format for the JSON logs
+    # Including standard log attributes and allowing for extra context
+    json_formatter = jsonlogger.JsonFormatter(
+        '%(asctime)s %(name)s %(levelname)s %(message)s %(lineno)d %(funcName)s',
+        rename_fields={'levelname': 'level', 'asctime': 'timestamp'}
+    )
+    file_handler.setFormatter(json_formatter)
+    logger.addHandler(file_handler)
+
+    # Add a handler for a separate, non-JSON error log if needed
+    error_handler = logging.FileHandler('shadow_ehr.error.log', mode='a')
+    error_handler.setLevel(logging.ERROR)
+    error_formatter = logging.Formatter(
         '%(asctime)s | %(levelname)s | [%(name)s] %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'
     )
-    file_handler.setFormatter(file_formatter)
-    logger.addHandler(file_handler)
+    error_handler.setFormatter(error_formatter)
+    logger.addHandler(error_handler)
 
     return logger
 
@@ -308,17 +332,31 @@ class ConnectionManager:
 
             # Extract patient ID and update cache
             patient_id = raw_patient or extract_patient_id(endpoint)
+            is_active_fetch = 'active-fetch' in endpoint
+
+            logger.info(f"Processing payload. Patient ID: {patient_id}, Is Active Fetch: {is_active_fetch}, Current Context: {self.current_patient_id}")
+            logger.info(f"Cache state BEFORE update: {list(self.patient_cache.keys())}")
+
+
             if patient_id:
-                logger.info(f"  Patient ID extracted: {patient_id}")
-                # Update current patient context
+                # If a patient ID is present in the payload, it's the source of truth.
+                if is_active_fetch and self.current_patient_id != patient_id:
+                    logger.warning(f"  New active fetch detected. Changing patient context from '{self.current_patient_id}' to '{patient_id}'.")
+                
                 self.current_patient_id = patient_id
                 await self.update_patient_cache(patient_id, record_type, fhir_resource)
-            elif self.current_patient_id and record_type != 'unknown':
-                # Use current patient context for clinical data without patient ID
-                logger.info(f"  Using current patient context: {self.current_patient_id}")
+            
+            elif self.current_patient_id and not is_active_fetch and record_type != 'unknown':
+                # For passive events WITHOUT an ID, use the last known patient context.
+                logger.info(f"  No patient ID in passive event. Using current patient context: {self.current_patient_id}")
                 await self.update_patient_cache(self.current_patient_id, record_type, fhir_resource)
+            
             else:
-                logger.debug("  No patient ID in endpoint and no current context")
+                # Discard if we have no context, or if it's an active fetch without an ID (which is an error state).
+                logger.warning(f"  Could not determine patient context for this event. Discarding.")
+                logger.warning(f"    - Endpoint: {endpoint}")
+                logger.warning(f"    - Is Active Fetch: {is_active_fetch}")
+                logger.warning(f"    - Current Context: {self.current_patient_id}")
 
             # Index event using Layer 2 Event Indexer (replaces simple append_index_entry)
             # The indexer provides:
@@ -393,6 +431,7 @@ class ConnectionManager:
     async def update_patient_cache(self, patient_id: str, record_type: str, fhir_resource: Any):
         """Update the patient cache with new data and emit patient update."""
 
+        logger.info(f"Updating cache for patient {patient_id} with record type {record_type}.")
         is_new_patient = patient_id not in self.patient_cache
 
         if is_new_patient:
@@ -414,6 +453,7 @@ class ConnectionManager:
             }
             self.stats['patients_cached'] += 1
             logger.info(f"NEW PATIENT ADDED TO CACHE: {patient_id}")
+            logger.info(f"Cache state AFTER adding new patient: {list(self.patient_cache.keys())}")
 
         cache = self.patient_cache[patient_id]
 
@@ -711,7 +751,61 @@ async def indexed_events(patient_id: Optional[str] = None, limit: int = 50):
         "limit": limit,
         "events": event_store.get_index(patient_id=patient_id, limit=limit),
     }
+# ... inside the FastAPI app ...
 
+@app.post("/ai/narrative/{patient_id}")
+async def generate_patient_narrative(patient_id: str, request: NarrativeRequest):
+    """
+    Generates a concise clinical narrative using structured data + optional vision.
+    """
+    logger.info("=" * 60)
+    logger.info(f"[NARRATIVE API] Request for patient: {patient_id}")
+    logger.info(f"[NARRATIVE API] Vision enabled: {request.include_vision}")
+
+    # 1. Get Clinical Data
+    logger.info(f"[NARRATIVE API] Checking patient_cache for {patient_id}...")
+    logger.info(f"[NARRATIVE API] Cached patients: {list(manager.patient_cache.keys())}")
+
+    if patient_id not in manager.patient_cache:
+        logger.error(f"[NARRATIVE API] Patient {patient_id} NOT in cache!")
+        return {"error": "Patient data not found in RAM. Navigate to chart first."}
+
+    clinical_data = manager.patient_cache[patient_id]
+    logger.info(f"[NARRATIVE API] Found patient in cache. Keys: {list(clinical_data.keys())}")
+
+    # Log data counts
+    logger.info(f"[NARRATIVE API] Data summary:")
+    logger.info(f"  - patient: {bool(clinical_data.get('patient'))}")
+    logger.info(f"  - medications: {len(clinical_data.get('medications', []))} items")
+    logger.info(f"  - problems: {len(clinical_data.get('problems', []))} items")
+    logger.info(f"  - allergies: {len(clinical_data.get('allergies', []))} items")
+    logger.info(f"  - vitals: {bool(clinical_data.get('vitals'))}")
+
+    # 2. Augment with Interpreted Data (Layer 3)
+    if patient_id in manager.clinical_cache:
+        interp = manager.clinical_cache[patient_id]
+        logger.info(f"[NARRATIVE API] Found interpreted data. Keys: {list(interp.keys())}")
+        if 'problem' in interp:
+            clinical_data['problems'] = interp['problem']
+            logger.info(f"[NARRATIVE API] Augmented problems: {len(clinical_data['problems'])} items")
+        if 'medication' in interp:
+            clinical_data['medications'] = interp['medication']
+            logger.info(f"[NARRATIVE API] Augmented medications: {len(clinical_data['medications'])} items")
+    else:
+        logger.info(f"[NARRATIVE API] No interpreted data found for {patient_id}")
+
+    # 3. Generate Narrative
+    logger.info("[NARRATIVE API] Calling narrative engine...")
+    engine = get_narrative_engine()
+    try:
+        result = await engine.generate_narrative(patient_id, clinical_data, request.include_vision)
+        logger.info(f"[NARRATIVE API] Narrative generated: {len(result.narrative)} chars")
+        logger.info("=" * 60)
+        return result
+    except Exception as e:
+        logger.error(f"[NARRATIVE API] Exception during narrative generation: {e}")
+        logger.exception("Full traceback:")
+        return {"error": f"Narrative generation failed: {str(e)}"}
 
 # ============================================================================
 # EVENT INDEXER ENDPOINTS (Layer 2)

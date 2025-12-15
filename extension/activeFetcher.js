@@ -264,7 +264,8 @@
   // ============================================================
 
   // Throttle delay between requests to avoid HTTP 500 rate limiting
-  const THROTTLE_DELAY_MS = 300;
+  // Increased to 1000ms (1 second) due to continued Athena rate limit issues
+  const THROTTLE_DELAY_MS = 1000;
 
   async function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -272,10 +273,11 @@
 
   async function fetchAllPatientData(chartId, options = {}) {
     Logger.info('═'.repeat(50));
-    Logger.info('BATCH FETCH INITIATED (throttled)', { chartId, options });
+    Logger.info('🚀 BATCH FETCH INITIATED', { chartId, options });
+    Logger.info('📋 Endpoints to fetch:', options.endpoints || 'default');
 
     if (!chartId) {
-      Logger.error('No chart ID provided - cannot fetch data');
+      Logger.error('❌ No chart ID provided - cannot fetch data');
       return { error: 'No chart ID provided', patientId: null };
     }
 
@@ -284,6 +286,8 @@
       patientId: chartId,  // Include patient ID in results
       _meta: { chartId, timestamp: new Date().toISOString() }
     };
+
+    Logger.info('🔧 Available endpoint keys:', Object.keys(endpoints));
 
     // Determine which endpoints to fetch (only chart-level, skip encounter-level unless we have encounterId)
     const chartEndpoints = ['demographics', 'activeMedications', 'activeProblems', 'allergies', 'vitals'];
@@ -343,11 +347,27 @@
     }
 
     Logger.info('═'.repeat(50));
-    Logger.success('BATCH FETCH COMPLETE', {
+    Logger.success('✅ BATCH FETCH COMPLETE', {
       total: successCount + failCount,
       successful: successCount,
       failed: failCount
     });
+
+    // Log what data we got
+    const dataKeys = Object.keys(results).filter(k => !k.startsWith('_') && k !== 'patientId');
+    Logger.info('📦 Data keys in results:', dataKeys);
+    for (const key of dataKeys) {
+      const val = results[key];
+      if (val && typeof val === 'object') {
+        Logger.info(`  📄 ${key}: success=${val.success}, hasData=${!!val.data}, dataType=${Array.isArray(val.data) ? 'array' : typeof val.data}`);
+        if (val.success && val.data) {
+          const count = Array.isArray(val.data) ? val.data.length : Object.keys(val.data).length;
+          Logger.success(`    ✅ ${key}: ${count} items`);
+        } else if (!val.success) {
+          Logger.error(`    ❌ ${key}: ${val.error || 'unknown error'}`);
+        }
+      }
+    }
 
     return results;
   }
@@ -444,14 +464,15 @@
 
   async function fetchPreOpData(patientId) {
     Logger.info('Fetching PRE-OP data for surgical workflow');
-    
+
+    // CRITICAL: Use the exact endpoint keys from ATHENA_CONFIG.endpoints
     const criticalEndpoints = [
       'demographics',
-      'medications',  // For anticoagulant status
+      'activeMedications',  // For anticoagulant status (NOT 'medications')
       'allergies',
-      'problems',
-      'labs',         // For renal function, coag panel
-      'documents',    // For cardiac clearance docs
+      'activeProblems',     // For diagnosis codes (NOT 'problems')
+      'historicalProblems', // Also fetch historical problems
+      'documents',          // For cardiac clearance docs
       'vitals'
     ];
 
@@ -501,10 +522,14 @@
       cardiacClearance: null,
       vascularHistory: [],
       criticalAllergies: [],
-      coagulationStatus: null
+      coagulationStatus: null,
+      problems: []  // Add problems to surgical extraction
     };
 
-    // Extract antithrombotic medications
+    // Log what we received for debugging
+    Logger.info('extractSurgicalRelevantData received keys:', Object.keys(rawData));
+
+    // Extract antithrombotic medications (key is 'medications' after mapping)
     if (rawData.medications?.success) {
       const meds = rawData.medications.data;
       const antithromboticKeywords = [
@@ -539,6 +564,19 @@
       surgical.criticalAllergies = filterByKeywords(allergies, [
         'contrast', 'iodine', 'latex', 'heparin', 'protamine'
       ]);
+    }
+
+    // Extract problems/diagnoses (key is 'problems' after mapping from 'activeProblems')
+    if (rawData.problems?.success) {
+      surgical.problems = rawData.problems.data || [];
+      Logger.success('Extracted problems:', surgical.problems.length);
+    }
+
+    // Also check historicalProblems
+    if (rawData.historicalProblems?.success) {
+      const historical = rawData.historicalProblems.data || [];
+      surgical.historicalProblems = historical;
+      Logger.success('Extracted historical problems:', historical.length);
     }
 
     return surgical;
