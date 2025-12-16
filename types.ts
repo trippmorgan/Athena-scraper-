@@ -54,3 +54,10 @@ export interface LedgerEntry {
   action: string; // e.g. "Generated Risk Score"
   timestamp: string;
 }
+
+export interface NarrativeResponse {
+  narrative: string;
+  sources_used: string[];
+  confidence: string;
+  generated_at: string;
+}

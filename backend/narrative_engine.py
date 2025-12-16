@@ -1,6 +1,6 @@
 """
 Narrative Engine: The Cognitive Layer
-Generates clinical narratives from structured data + unstructured artifacts (Vision).
+Strictly separates Data Sorting from Narrative Generation.
 """
 
 import os
@@ -11,23 +11,25 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime
 from pydantic import BaseModel
 
-# Vision/LLM Provider
+# Google GenAI
 from google import genai
 from google.genai import types
 
-from files import get_artifact_store, StoredArtifact
+# The Data Separation Layer
+from backend.vascular_parser import build_vascular_profile, VascularProfile
+from backend.files import get_artifact_store
 
-# Use the main logger so logs appear together
 logger = logging.getLogger("shadow-ehr")
 
 class NarrativeRequest(BaseModel):
     include_vision: bool = False
-    focus_areas: List[str] = ["vascular_history", "comorbidities", "medications"]
+    # The engine now creates the narrative based on the specific "View" requested
+    narrative_type: str = "vascular_intro" # vascular_intro, discharge_summary, etc.
 
 class NarrativeResponse(BaseModel):
     narrative: str
     sources_used: List[str]
-    confidence: str
+    data_quality_score: float # New: How much data did we actually have?
     generated_at: str
 
 class NarrativeEngine:
@@ -35,229 +37,202 @@ class NarrativeEngine:
         api_key = os.environ.get("GEMINI_API_KEY")
         if api_key:
             self.client = genai.Client(api_key=api_key)
-            self.model_id = "gemini-2.0-flash" # High speed, multimodal
+            self.model_id = "gemini-2.0-flash"
         else:
             self.client = None
-            logger.warning("NarrativeEngine: No API Key found. AI features disabled.")
+            logger.warning("NarrativeEngine: No API Key found.")
 
-    async def generate_narrative(self, patient_id: str, clinical_data: Dict[str, Any], include_vision: bool = False) -> NarrativeResponse:
+    async def generate_narrative(self, patient_id: str, raw_cache_data: Dict[str, Any], include_vision: bool = False) -> NarrativeResponse:
         """
-        Orchestrates the data gathering and LLM generation.
+        1. ABSORB: Take raw cache.
+        2. SORT: Run strict extractors (VascularProfile).
+        3. SYNTHESIZE: Send *only* sorted data to LLM.
         """
-        logger.info(f"[NARRATIVE] generate_narrative called for {patient_id}")
-        logger.info(f"[NARRATIVE] Clinical data keys: {list(clinical_data.keys())}")
-        logger.info(f"[NARRATIVE] Medications count: {len(clinical_data.get('medications', []))}")
-        logger.info(f"[NARRATIVE] Problems count: {len(clinical_data.get('problems', []))}")
+        
+        # --- STEP 1: THE DATA SEPARATION LAYER ---
+        # We do not send raw_cache_data to the LLM. We build a Profile.
+        logger.info(f"[NARRATIVE] 1. Sorting data for {patient_id}...")
+        
+        # Transform raw cache into the format vascular_parser expects
+        # (This adapts the main.py cache structure to the parser's expected input)
+        parser_input = {
+            "demographics": {"data": raw_cache_data.get("patient") or {}},
+            "medications": {"data": raw_cache_data.get("medications") or []},
+            "problems": {"data": raw_cache_data.get("problems") or []},
+            "labs": {"data": raw_cache_data.get("labs") or []},
+            "notes": {"data": raw_cache_data.get("notes") or []},
+            "procedures": {"data": raw_cache_data.get("surgical_history") or []},
+            "allergies": {"data": raw_cache_data.get("allergies") or []},
+            "documents": {"data": raw_cache_data.get("documents") or []}
+        }
 
-        if not self.client:
-            logger.error("[NARRATIVE] No Gemini client available!")
-            return NarrativeResponse(
-                narrative="AI Service Unavailable. Please configure GEMINI_API_KEY.",
-                sources_used=[],
-                confidence="none",
-                generated_at=datetime.now().isoformat()
-            )
-
-        # 1. Build the Structured Context (The "Skeleton")
-        logger.info("[NARRATIVE] Building structured context...")
-        context_str = self._build_structured_context(clinical_data)
-        logger.info(f"[NARRATIVE] Context built: {len(context_str)} chars")
-        sources = ["Structured EHR Data"]
-
-        # 2. (Optional) Vision Processing of Artifacts
-        vision_context = ""
+        # This function acts as the firewall/sorter
+        profile: VascularProfile = build_vascular_profile(patient_id, parser_input)
+        
+        # --- STEP 2: VISION EXTRACTION (Optional) ---
+        vision_insights = ""
+        doc_sources = []
         if include_vision:
-            vision_context, artifact_sources = self._process_visual_artifacts(patient_id)
-            if vision_context:
-                context_str += f"\n\n=== EXTRACTED FROM SCANNED DOCUMENTS ===\n{vision_context}"
-                sources.extend(artifact_sources)
+            logger.info("[NARRATIVE] 2. Absorbing visual artifacts...")
+            vision_insights, doc_sources = await self._extract_from_documents(patient_id)
 
-        # 3. Construct the Prompt
+        # --- STEP 3: CONTEXT PREPARATION ---
+        # We serialize the SORTED profile, not the raw JSON.
+        llm_context = self._prepare_llm_context(profile, vision_insights)
+        
+        # Calculate a basic quality score based on fields present
+        quality_score = self._calculate_data_quality(profile)
+
+        # --- STEP 4: GENERATION ---
+        if not self.client:
+            return NarrativeResponse(narrative="AI Config Missing", sources_used=[], data_quality_score=0, generated_at="")
+
+        logger.info("[NARRATIVE] 3. Generating Narrative...")
         prompt = f"""
-        ROLE: Vascular Surgery Scribe
-        TASK: Synthesize the provided patient data into a concise introductory narrative.
+        ROLE: Expert Vascular Surgeon's Scribe.
+        TASK: Write the "History of Present Illness" (HPI) opening paragraph.
         
-        FORMAT REQUIREMENT:
-        "This is a [AGE] year-old [SEX] with a history of [KEY COMORBIDITIES]. Her/His surgical history is significant for [VASCULAR PROCEDURES]."
-        
-        RULES:
-        1. Start exactly with "This is a..."
-        2. List comorbidities relevant to vascular risk (HTN, HLD, DM, CAD, Smoking, CKD).
-        3. For surgical history, prioritize: Carotid, Aortic, and Peripheral bypass/stents. Include dates if available.
-        4. Do not list medications unless they are relevant anticoagulants (e.g. "currently on Warfarin").
-        5. Keep it under 4 sentences. 
-        6. If dates are missing, omit them rather than guessing.
+        INPUT DATA (Sorted & Verified):
+        {llm_context}
 
-        INPUT DATA:
-        {context_str}
+        INSTRUCTIONS:
+        1. Start EXACTLY with: "This is a [AGE] year-old [GENDER]..."
+        2. List ONLY relevant comorbidities (HTN, HLD, DM, CAD, CKD, COPD, Smoking).
+        3. Summarize Surgical History chronologically. If dates are known, use them. If not, say "history of...".
+        4. Mention critical vascular medications (Antiplatelets/Anticoagulants) only if active.
+        5. Incorporate insights extracted from documents if they add specific dates or procedures not in the structured data.
+        6. Style: Professional, medical, concise. No bullet points. Max 4 sentences.
+
+        OUTPUT:
         """
-        logger.info(f"[NARRATIVE] Full prompt being sent to Gemini:\n{prompt}")
 
-        # 4. Call LLM (run synchronous call in thread pool with timeout)
         try:
-            logger.info(f"Calling Gemini ({self.model_id}) with context: {len(context_str)} chars")
-            logger.debug(f"Context preview: {context_str[:500]}...")
-
-            # Run the synchronous Gemini call in a thread pool to not block async
-            def call_gemini():
-                return self.client.models.generate_content(
-                    model=self.model_id,
-                    contents=prompt,
-                    config=types.GenerateContentConfig(
-                        temperature=0.1, # Deterministic
-                    )
-                )
-
-            # Run with 30 second timeout
-            loop = asyncio.get_event_loop()
-            response = await asyncio.wait_for(
-                loop.run_in_executor(None, call_gemini),
-                timeout=30.0
+            # Use the new google-genai SDK API
+            response = await self.client.aio.models.generate_content(
+                model=self.model_id,
+                contents=prompt
             )
-
-            logger.info(f"[NARRATIVE] Raw Gemini response object: {response}")
             narrative = response.text.strip()
-            logger.info(f"Gemini response received: {len(narrative)} chars")
-            logger.debug(f"Narrative preview: {narrative[:200]}...")
-        except asyncio.TimeoutError:
-            logger.error("Gemini call timed out after 30 seconds")
-            narrative = "Narrative generation timed out. Please try again."
         except Exception as e:
-            logger.error(f"LLM Generation failed: {e}")
-            logger.exception("Full Gemini error traceback:")
-            narrative = f"Error generating narrative: {str(e)}"
+            logger.error(f"Gemini Error: {e}")
+            narrative = "Could not generate narrative due to AI service error."
 
         return NarrativeResponse(
             narrative=narrative,
-            sources_used=sources,
-            confidence="high" if vision_context else "medium",
+            sources_used=["Structured EHR Data"] + doc_sources,
+            data_quality_score=quality_score,
             generated_at=datetime.now().isoformat()
         )
 
-    def _build_structured_context(self, data: Dict[str, Any]) -> str:
-        """Flattens the cache into a string for the LLM."""
-        logger.info("[NARRATIVE] _build_structured_context starting...")
-        logger.info(f"[NARRATIVE] Input data keys: {list(data.keys())}")
-
-        # CRITICAL: Use `or {}` to handle None/False values, not just missing keys
-        pt = data.get('patient') or {}
-        meds = data.get('medications') or []
-        probs = data.get('problems') or []
-        history = data.get('surgical_history') or []
-
-        logger.info(f"[NARRATIVE] Patient data: {bool(pt)}, keys: {list(pt.keys()) if pt else 'none'}")
-        logger.info(f"[NARRATIVE] Medications: {len(meds)} items")
-        logger.info(f"[NARRATIVE] Problems: {len(probs)} items")
-        logger.info(f"[NARRATIVE] Surgical history: {len(history)} items")
-
-        # Log sample of medications if available
-        if meds:
-            sample_meds = [m.get('name', str(m)[:50]) if isinstance(m, dict) else str(m)[:50] for m in meds[:5]]
-            logger.info(f"[NARRATIVE] Sample medications: {sample_meds}")
-
-        # Log sample of problems if available
-        if probs:
-            # Problems may have 'display_name', 'display', or 'name' depending on source
-            sample_probs = [p.get('display_name', p.get('display', p.get('name', str(p)[:50]))) if isinstance(p, dict) else str(p)[:50] for p in probs[:5]]
-            logger.info(f"[NARRATIVE] Sample problems: {sample_probs}")
-
-        # Calculate Age
-        dob = pt.get('birthDate') if isinstance(pt, dict) else None
-        age = "Unknown"
-        if dob:
-            try:
-                bday = datetime.strptime(dob, "%Y-%m-%d")
-                age = (datetime.now() - bday).days // 365
-                logger.info(f"[NARRATIVE] Calculated age: {age}")
-            except Exception as e:
-                logger.warning(f"[NARRATIVE] Could not parse DOB: {dob}, error: {e}")
-
-        # Build summary for LLM - handle varying data structures
-        gender = pt.get('gender', 'unknown') if isinstance(pt, dict) else 'unknown'
-
-        # Extract problem names - try multiple possible keys
-        problem_names = []
-        for p in probs[:15]:
-            if isinstance(p, dict):
-                name = p.get('display_name') or p.get('display') or p.get('name') or p.get('description') or 'Unknown'
-                problem_names.append(name)
-            else:
-                problem_names.append(str(p))
-
-        # Extract medication names
-        med_names = []
-        for m in meds[:15]:
-            if isinstance(m, dict):
-                name = m.get('name') or m.get('medication') or m.get('drug') or 'Unknown'
-                med_names.append(name)
-            else:
-                med_names.append(str(m))
-
-        # Extract surgical history
-        surgery_list = []
-        for h in history:
-            if isinstance(h, dict):
-                proc = h.get('procedure', 'Unknown procedure')
-                date = h.get('date', '')
-                surgery_list.append(f"{proc} ({date})" if date else proc)
-
-        summary = {
-            "Demographics": f"{age}-year-old {gender}",
-            "Active Problems": problem_names,
-            "Medications": med_names,
-            "Known Surgical History (Structured)": surgery_list
-        }
-
-        logger.info(f"[NARRATIVE] Summary built: {len(problem_names)} problems, {len(med_names)} meds")
-        return json.dumps(summary, indent=2)
-
-    def _process_visual_artifacts(self, patient_id: str) -> tuple[str, List[str]]:
+    def _prepare_llm_context(self, profile: VascularProfile, vision_text: str) -> str:
         """
-        Uses Gemini Vision to read PDFs/Images in the artifact store.
+        Converts the Pydantic VascularProfile into a clean text block.
+        This is the only thing the LLM sees.
+        """
+        # Comorbidities Filter
+        relevant_dx = [dx.name for dx in profile.diagnoses if dx.status == 'active']
+
+        # Medications Filter (Antithrombotics only)
+        meds = [f"{m.name} ({m.category})" for m in profile.antithrombotics]
+
+        # Vascular-specific history
+        vascular_hx = []
+        for h in profile.vascular_history:
+            if h.date:
+                vascular_hx.append(f"{h.procedure} ({h.date})")
+            else:
+                vascular_hx.append(h.procedure)
+
+        # All surgical history
+        surgical_hx = []
+        for h in profile.surgical_history:
+            if h.date:
+                surgical_hx.append(f"{h.procedure} ({h.date})")
+            else:
+                surgical_hx.append(h.procedure)
+
+        # Format age/gender
+        age_str = f"{profile.age}" if profile.age else "Unknown age"
+        gender_str = profile.gender or "Unknown gender"
+
+        context = f"""
+        PATIENT: {profile.name}
+        MRN: {profile.mrn}
+        AGE: {age_str} years old
+        GENDER: {gender_str}
+
+        VERIFIED COMORBIDITIES:
+        {', '.join(relevant_dx) if relevant_dx else "None documented"}
+
+        ACTIVE ANTITHROMBOTICS:
+        {', '.join(meds) if meds else "None"}
+
+        VASCULAR SURGICAL HISTORY:
+        {'; '.join(vascular_hx) if vascular_hx else "None documented"}
+
+        ALL SURGICAL HISTORY:
+        {'; '.join(surgical_hx) if surgical_hx else "None documented in structured data"}
+
+        DOCUMENT EXTRACTIONS (Vision Model):
+        {vision_text if vision_text else "No additional documents read."}
+        """
+        return context
+
+    async def _extract_from_documents(self, patient_id: str) -> tuple[str, List[str]]:
+        """
+        Uses Vision to read documents. This constitutes 'reading' data 
+        that wasn't in the structured API response.
         """
         store = get_artifact_store()
         artifacts = store.list_by_patient(patient_id)
         
-        extracted_texts = []
+        # Sort by date, take top 3
+        # In a real system, we'd filter for 'Operative Note' types
+        recent_artifacts = sorted(artifacts, key=lambda x: x.stored_at or "", reverse=True)[:3]
+        
+        extracted_info = []
         sources = []
+        
+        if not self.client:
+            return "", []
 
-        # Process top 3 most recent artifacts to save latency
-        # Ideally, filter for 'Note', 'Report', or 'Scan' types
-        target_artifacts = sorted(artifacts, key=lambda x: x.stored_at or "", reverse=True)[:3]
-
-        for art in target_artifacts:
-            # We can only process images directly or PDFs if supported by the library/model
-            # For this implementation, we assume images (jpg/png) or convert PDFs
-            if not art.mime_type or not ('image' in art.mime_type or 'pdf' in art.mime_type):
-                continue
-
-            file_bytes = store.get(art.artifact_id)
-            if not file_bytes:
-                continue
+        for art in recent_artifacts:
+            # Only process images/PDFs
+            if not art.mime_type or 'json' in art.mime_type: continue
+            
+            data = store.get(art.artifact_id)
+            if not data: continue
 
             try:
-                prompt = "Extract surgical history and dates from this document. Ignore header/footer boilerplate."
-                
-                # Direct byte submission to Gemini
-                response = self.client.models.generate_content(
+                prompt = "Read this medical document. List any surgical procedures and their dates found in the text. Format: Procedure - Date."
+
+                resp = await self.client.aio.models.generate_content(
                     model=self.model_id,
                     contents=[
-                        types.Part.from_bytes(data=file_bytes, mime_type=art.mime_type),
+                        types.Part.from_bytes(data=data, mime_type=art.mime_type),
                         prompt
                     ]
                 )
-                
-                if response.text:
-                    extracted_texts.append(f"--- Document: {art.original_filename} ---\n{response.text}")
-                    sources.append(f"Vision: {art.original_filename}")
-                    
+
+                if resp.text:
+                    extracted_info.append(f"[From {art.original_filename}]: {resp.text}")
+                    sources.append(f"Doc: {art.original_filename}")
             except Exception as e:
-                logger.error(f"Vision processing failed for {art.artifact_id}: {e}")
+                logger.error(f"Vision failed on {art.artifact_id}: {e}")
 
-        return "\n".join(extracted_texts), sources
+        return "\n".join(extracted_info), sources
 
-# Global Singleton
+    def _calculate_data_quality(self, profile: VascularProfile) -> float:
+        """Simple heuristic for data completeness."""
+        score = 0.0
+        if profile.name != "Unknown": score += 0.2
+        if profile.diagnoses: score += 0.3
+        if profile.antithrombotics: score += 0.1
+        if profile.vascular_history: score += 0.2
+        if profile.renal_function: score += 0.1
+        if profile.cardiac_clearance: score += 0.1
+        return min(score, 1.0)
+
 _narrative_engine = NarrativeEngine()
-
 def get_narrative_engine():
     return _narrative_engine

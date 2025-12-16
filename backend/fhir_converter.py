@@ -560,20 +560,33 @@ def convert_patient(payload: Any, patient_id: Optional[str] = None) -> FHIRPatie
     if not isinstance(payload, dict):
         return FHIRPatient(id=patient_id or generate_id(payload))
 
-    # Extract name components
-    first_name = payload.get('firstName') or payload.get('first_name') or payload.get('givenName') or ''
-    last_name = payload.get('lastName') or payload.get('last_name') or payload.get('familyName') or ''
+    # Extract name components (handle both camelCase and PascalCase)
+    first_name = (payload.get('firstName') or payload.get('FirstName') or
+                  payload.get('first_name') or payload.get('givenName') or '')
+    last_name = (payload.get('lastName') or payload.get('LastName') or
+                 payload.get('last_name') or payload.get('familyName') or '')
     full_name = payload.get('patientName') or payload.get('name') or f"{first_name} {last_name}".strip()
 
     # Extract identifiers
     identifiers = []
-    mrn = payload.get('mrn') or payload.get('patientId') or payload.get('patient_id') or patient_id
+    mrn = payload.get('mrn') or payload.get('MRN') or payload.get('patientId') or payload.get('patient_id') or patient_id
     if mrn:
         identifiers.append({"system": "mrn", "value": str(mrn)})
 
-    # Extract other fields
-    dob = normalize_date(payload.get('dob') or payload.get('dateOfBirth') or payload.get('birthDate'))
-    gender = payload.get('gender') or payload.get('sex') or ''
+    # Extract DOB (handle Athena's nested BirthDate structure)
+    dob_raw = (payload.get('dob') or payload.get('dateOfBirth') or
+               payload.get('birthDate') or payload.get('BirthDate'))
+    # Handle Athena's {"__CLASS__": "DateTime", "Date": "1944-02-18"} structure
+    if isinstance(dob_raw, dict):
+        dob_raw = dob_raw.get('Date') or dob_raw.get('date') or dob_raw.get('value')
+    dob = normalize_date(dob_raw)
+
+    # Extract gender (handle both cases)
+    gender = (payload.get('gender') or payload.get('Gender') or
+              payload.get('sex') or payload.get('Sex') or
+              payload.get('GenderMarker') or '')
+
+    logger.info(f"[FHIR] convert_patient: name='{full_name}', dob='{dob}', gender='{gender}'")
 
     return FHIRPatient(
         id=patient_id or generate_id(payload),

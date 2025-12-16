@@ -283,10 +283,15 @@ class ConnectionManager:
             raw_timestamp = data.get('timestamp') or datetime.utcnow().isoformat()
             source = data.get('source', 'chrome_interceptor')
 
-            # Extract patient ID from multiple locations (active fetch includes it in _meta)
+            # Extract patient ID from multiple locations (active fetch includes it in _meta or raw wrapper)
             raw_patient = data.get('patientId')
             if not raw_patient and isinstance(payload, dict):
                 raw_patient = payload.get('patientId')
+                # Check inside 'raw' wrapper (compound payloads from active fetch)
+                if not raw_patient and 'raw' in payload and isinstance(payload.get('raw'), dict):
+                    raw_patient = payload['raw'].get('patientId')
+                    if not raw_patient and '_meta' in payload['raw']:
+                        raw_patient = payload['raw'].get('_meta', {}).get('chartId')
                 if not raw_patient and '_meta' in payload:
                     raw_patient = payload.get('_meta', {}).get('chartId')
 
@@ -756,56 +761,36 @@ async def indexed_events(patient_id: Optional[str] = None, limit: int = 50):
 @app.post("/ai/narrative/{patient_id}")
 async def generate_patient_narrative(patient_id: str, request: NarrativeRequest):
     """
-    Generates a concise clinical narrative using structured data + optional vision.
+    Generates a concise clinical narrative.
+    The engine now handles the 'Sorting' (VascularProfile creation) internally
+    to ensure the LLM only sees clean data.
     """
     logger.info("=" * 60)
-    logger.info(f"[NARRATIVE API] Request for patient: {patient_id}")
-    logger.info(f"[NARRATIVE API] Vision enabled: {request.include_vision}")
+    logger.info(f"[NARRATIVE API] Processing for: {patient_id}")
 
-    # 1. Get Clinical Data
-    logger.info(f"[NARRATIVE API] Checking patient_cache for {patient_id}...")
-    logger.info(f"[NARRATIVE API] Cached patients: {list(manager.patient_cache.keys())}")
-
+    # 1. ABSORB: Get Raw Data from Cache
     if patient_id not in manager.patient_cache:
-        logger.error(f"[NARRATIVE API] Patient {patient_id} NOT in cache!")
         return {"error": "Patient data not found in RAM. Navigate to chart first."}
 
-    clinical_data = manager.patient_cache[patient_id]
-    logger.info(f"[NARRATIVE API] Found patient in cache. Keys: {list(clinical_data.keys())}")
-
-    # Log data counts
-    logger.info(f"[NARRATIVE API] Data summary:")
-    logger.info(f"  - patient: {bool(clinical_data.get('patient'))}")
-    logger.info(f"  - medications: {len(clinical_data.get('medications', []))} items")
-    logger.info(f"  - problems: {len(clinical_data.get('problems', []))} items")
-    logger.info(f"  - allergies: {len(clinical_data.get('allergies', []))} items")
-    logger.info(f"  - vitals: {bool(clinical_data.get('vitals'))}")
-
-    # 2. Augment with Interpreted Data (Layer 3)
+    raw_cache = manager.patient_cache[patient_id]
+    
+    # Optional: Merge Interpreted Data (Layer 3) into Raw Cache before sending
     if patient_id in manager.clinical_cache:
         interp = manager.clinical_cache[patient_id]
-        logger.info(f"[NARRATIVE API] Found interpreted data. Keys: {list(interp.keys())}")
         if 'problem' in interp:
-            clinical_data['problems'] = interp['problem']
-            logger.info(f"[NARRATIVE API] Augmented problems: {len(clinical_data['problems'])} items")
+            # We prefer interpreted problems if available
+            raw_cache['problems'] = interp['problem']
         if 'medication' in interp:
-            clinical_data['medications'] = interp['medication']
-            logger.info(f"[NARRATIVE API] Augmented medications: {len(clinical_data['medications'])} items")
-    else:
-        logger.info(f"[NARRATIVE API] No interpreted data found for {patient_id}")
+            raw_cache['medications'] = interp['medication']
 
-    # 3. Generate Narrative
-    logger.info("[NARRATIVE API] Calling narrative engine...")
+    # 2. SORT & SYNTHESIZE (Handled by Engine)
     engine = get_narrative_engine()
     try:
-        result = await engine.generate_narrative(patient_id, clinical_data, request.include_vision)
-        logger.info(f"[NARRATIVE API] Narrative generated: {len(result.narrative)} chars")
-        logger.info("=" * 60)
+        result = await engine.generate_narrative(patient_id, raw_cache, request.include_vision)
         return result
     except Exception as e:
-        logger.error(f"[NARRATIVE API] Exception during narrative generation: {e}")
-        logger.exception("Full traceback:")
-        return {"error": f"Narrative generation failed: {str(e)}"}
+        logger.error(f"[NARRATIVE API] Failed: {e}")
+        return {"error": str(e)}
 
 # ============================================================================
 # EVENT INDEXER ENDPOINTS (Layer 2)
@@ -1264,10 +1249,14 @@ async def ingest_payload(request: Request, x_source: Optional[str] = Header(None
         size = body.get('size', 0)
 
         # Extract patient ID from multiple possible locations
-        # Priority: body.patientId > data.patientId > data._meta.chartId > URL extraction
+        # Priority: body.patientId > data.patientId > data.raw.patientId > data._meta.chartId > data.raw._meta.chartId
         patient_id = body.get('patientId')
         if not patient_id and isinstance(data, dict):
             patient_id = data.get('patientId')
+            if not patient_id and 'raw' in data and isinstance(data.get('raw'), dict):
+                patient_id = data['raw'].get('patientId')
+                if not patient_id and '_meta' in data['raw']:
+                    patient_id = data['raw'].get('_meta', {}).get('chartId')
             if not patient_id and '_meta' in data:
                 patient_id = data.get('_meta', {}).get('chartId')
 
