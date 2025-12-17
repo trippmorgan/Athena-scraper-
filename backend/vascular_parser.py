@@ -91,9 +91,6 @@ class VascularProfile(BaseModel):
     patient_id: str
     mrn: str
     name: str
-    age: Optional[int] = None
-    gender: Optional[str] = None
-    dob: Optional[str] = None
 
     # Pre-op critical data
     antithrombotics: List[AntithromboticMed] = []
@@ -105,11 +102,8 @@ class VascularProfile(BaseModel):
     # Diagnoses/Problems - ALL active problems for the patient
     diagnoses: List[Diagnosis] = []
 
-    # Surgical history (vascular-specific)
+    # Surgical history
     vascular_history: List[VascularHistory] = []
-
-    # All surgical history (general)
-    surgical_history: List[VascularHistory] = []
 
     # Risk flags
     high_bleeding_risk: bool = False
@@ -408,38 +402,6 @@ def parse_vascular_history(procedures: List[Any], notes: List[Any] = None, probl
     return results
 
 
-def parse_all_surgical_history(procedures: List[Any]) -> List[VascularHistory]:
-    """Extract ALL surgical procedures (not just vascular-related)."""
-    results = []
-
-    for item in procedures:
-        if not item:
-            continue
-
-        proc_name = ""
-        date = None
-        location = None
-
-        if isinstance(item, dict):
-            proc_name = (item.get("name") or item.get("procedure") or
-                        item.get("description") or item.get("display") or
-                        item.get("title") or item.get("procedureName") or "")
-            date = (item.get("date") or item.get("procedureDate") or
-                   item.get("performedDate") or item.get("serviceDate"))
-            location = item.get("location") or item.get("site") or item.get("bodySite")
-        elif isinstance(item, str):
-            proc_name = item
-
-        if proc_name:
-            results.append(VascularHistory(
-                procedure=proc_name,
-                date=date,
-                location=location
-            ))
-
-    return results
-
-
 def parse_diagnoses(problems: List[Any]) -> List[Diagnosis]:
     """Extract all diagnoses/problems with ICD-10 codes."""
     results = []
@@ -457,16 +419,19 @@ def parse_diagnoses(problems: List[Any]) -> List[Diagnosis]:
                     prob.get("diagnosisName") or "Unknown")
 
             # Try multiple possible field names for ICD-10 code
-            icd10 = (prob.get("icd10Code") or prob.get("icd10") or
-                     prob.get("code") or prob.get("diagnosisCode") or
-                     prob.get("snomedCode") or None)
+            # Handles both camelCase and snake_case variants
+            icd10 = (prob.get("icd10_code") or prob.get("icd10Code") or
+                     prob.get("icd10") or prob.get("code") or
+                     prob.get("diagnosisCode") or prob.get("snomedCode") or
+                     prob.get("snomed_code") or None)
 
-            # Try to get status
-            status = (prob.get("status") or prob.get("clinicalStatus") or
-                      prob.get("problemStatus") or "active")
+            # Try to get status (both camelCase and snake_case)
+            status = (prob.get("clinical_status") or prob.get("clinicalStatus") or
+                      prob.get("status") or prob.get("problemStatus") or "active")
 
-            # Try to get onset date
-            onset = (prob.get("onsetDate") or prob.get("startDate") or
+            # Try to get onset date (both camelCase and snake_case)
+            onset = (prob.get("onset_date") or prob.get("onsetDate") or
+                     prob.get("startDate") or prob.get("start_date") or
                      prob.get("dateOfOnset") or prob.get("diagnosedDate") or None)
         elif isinstance(prob, str):
             name = prob
@@ -498,99 +463,50 @@ def build_vascular_profile(patient_id: str, raw_data: Dict[str, Any]) -> Vascula
     """Build a complete vascular surgery profile from raw EHR data."""
     
     logger.info(f"Building vascular profile for patient {patient_id}")
-
-    # Extract patient identifiers and demographics
-    patient_info = raw_data.get("demographics", {}).get("data", {})
-    logger.info(f"[VASCULAR] Demographics data keys: {list(patient_info.keys()) if isinstance(patient_info, dict) else 'not a dict'}")
-    mrn = patient_info.get("mrn") or patient_info.get("patientId") or patient_info.get("MRN") or patient_id
-
-    # Extract name (handle Athena's FirstName/LastName format)
-    name = patient_info.get("name") or patient_info.get("patientName")
-    if not name:
-        first = patient_info.get("FirstName") or patient_info.get("firstName") or ""
-        last = patient_info.get("LastName") or patient_info.get("lastName") or ""
-        if first or last:
-            name = f"{first} {last}".strip()
-        else:
-            name = "Unknown"
+    
+    # Extract patient identifiers
+    # Use (x or {}) pattern to handle explicit None values
+    patient_info = (raw_data.get("demographics") or {}).get("data") or {}
+    mrn = patient_info.get("mrn") or patient_info.get("patientId") or patient_id
+    name = patient_info.get("name") or patient_info.get("patientName") or "Unknown"
     if isinstance(name, dict):
         name = name.get("full") or f"{name.get('given', [''])[0]} {name.get('family', '')}"
 
-    # Extract gender (handle various field names including Athena's capitalized versions)
-    gender = (patient_info.get("sex") or patient_info.get("Sex") or
-              patient_info.get("gender") or patient_info.get("Gender") or
-              patient_info.get("GenderMarker") or patient_info.get("administrativeGender"))
-    if gender:
-        gender = str(gender).lower()
-        if gender in ["m", "male"]:
-            gender = "male"
-        elif gender in ["f", "female"]:
-            gender = "female"
-        else:
-            gender = gender.capitalize()
-
-    # Extract DOB and calculate age (handle Athena's nested BirthDate structure)
-    dob = (patient_info.get("dob") or patient_info.get("dateOfBirth") or
-           patient_info.get("birthDate") or patient_info.get("BirthDate"))
-
-    # Handle Athena's nested date structure: {"__CLASS__": "DateTime", "Date": "1944-02-18"}
-    if isinstance(dob, dict):
-        dob = dob.get("Date") or dob.get("date") or dob.get("value")
-
-    age = None
-    if dob:
-        try:
-            # Try multiple date formats
-            for fmt in ["%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y", "%Y/%m/%d"]:
-                try:
-                    dob_date = datetime.strptime(str(dob)[:10], fmt)
-                    today = datetime.now()
-                    age = today.year - dob_date.year - ((today.month, today.day) < (dob_date.month, dob_date.day))
-                    break
-                except ValueError:
-                    continue
-        except Exception as e:
-            logger.warning(f"Could not parse DOB '{dob}': {e}")
-    
     # Parse medications
-    meds_data = raw_data.get("medications", {}).get("data", [])
+    meds_data = (raw_data.get("medications") or {}).get("data") or []
     if isinstance(meds_data, dict):
         meds_data = meds_data.get("medications", [])
     antithrombotics = parse_antithrombotics(meds_data)
-    
+
     # Parse labs
-    labs_data = raw_data.get("labs", {}).get("data", [])
+    labs_data = (raw_data.get("labs") or {}).get("data") or []
     if isinstance(labs_data, dict):
         labs_data = labs_data.get("results", []) or labs_data.get("labs", [])
     renal = parse_renal_function(labs_data)
     coag = parse_coagulation(labs_data)
-    
+
     # Parse documents/notes
-    docs_data = raw_data.get("documents", {}).get("data", [])
-    notes_data = raw_data.get("notes", {}).get("data", [])
+    docs_data = (raw_data.get("documents") or {}).get("data") or []
+    notes_data = (raw_data.get("notes") or {}).get("data") or []
     cardiac = parse_cardiac_clearance(docs_data, notes_data)
-    
+
     # Parse allergies
-    allergy_data = raw_data.get("allergies", {}).get("data", [])
+    allergy_data = (raw_data.get("allergies") or {}).get("data") or []
     if isinstance(allergy_data, dict):
         allergy_data = allergy_data.get("allergies", [])
     allergies = parse_critical_allergies(allergy_data)
-    
+
     # Parse procedures and problems for vascular history
-    proc_data = raw_data.get("procedures", {}).get("data", [])
-    if isinstance(proc_data, dict):
-        proc_data = proc_data.get("procedures", []) or proc_data.get("surgicalHistory", [])
-    problems_data = raw_data.get("problems", {}).get("data", [])
+    proc_data = (raw_data.get("procedures") or {}).get("data") or []
+    problems_data = (raw_data.get("problems") or {}).get("data") or []
     if isinstance(problems_data, dict):
         problems_data = problems_data.get("problems", []) or problems_data.get("activeProblems", [])
-    # Vascular-specific history
-    vascular_history = parse_vascular_history(proc_data, notes_data, problems_data)
-    # ALL surgical history
-    all_surgical_history = parse_all_surgical_history(proc_data)
+    # Include problems as potential vascular diagnoses
+    history = parse_vascular_history(proc_data, notes_data, problems_data)
 
     # Parse ALL diagnoses/problems (not just vascular-related)
     diagnoses = parse_diagnoses(problems_data)
-    logger.info(f"Parsed {len(diagnoses)} diagnoses, {len(all_surgical_history)} surgical procedures")
+    logger.info(f"Parsed {len(diagnoses)} diagnoses from problems data")
     
     # Determine risk flags (ensure bool, not None)
     high_bleeding_risk = bool(
@@ -619,25 +535,20 @@ def build_vascular_profile(patient_id: str, raw_data: Dict[str, Any]) -> Vascula
         patient_id=patient_id,
         mrn=str(mrn),
         name=str(name),
-        age=age,
-        gender=gender,
-        dob=str(dob) if dob else None,
         antithrombotics=antithrombotics,
         renal_function=renal,
         coagulation=coag,
         cardiac_clearance=cardiac,
         critical_allergies=allergies,
         diagnoses=diagnoses,
-        vascular_history=vascular_history,
-        surgical_history=all_surgical_history,
+        vascular_history=history,
         high_bleeding_risk=high_bleeding_risk,
         contrast_caution=contrast_caution,
         cardiac_risk=cardiac_risk
     )
 
-    logger.info(f"Vascular profile built: {name}, {age}yo {gender}, "
-                f"{len(antithrombotics)} antithrombotics, {len(allergies)} critical allergies, "
-                f"{len(vascular_history)} vascular procedures, {len(all_surgical_history)} total surgical, "
+    logger.info(f"Vascular profile built: {len(antithrombotics)} antithrombotics, "
+                f"{len(allergies)} critical allergies, {len(history)} prior procedures, "
                 f"{len(diagnoses)} diagnoses")
     
     return profile

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Sparkles, Eye, Copy, RefreshCw, FileText, ShieldCheck } from 'lucide-react';
+import { Sparkles, Eye, Copy, RefreshCw, FileText, ShieldCheck, AlertTriangle } from 'lucide-react';
 
 interface NarrativeProps {
   patientId: string;
+  onGenerate?: () => void;
 }
 
 export const NarrativeCard: React.FC<NarrativeProps> = ({ patientId }) => {
@@ -11,9 +12,11 @@ export const NarrativeCard: React.FC<NarrativeProps> = ({ patientId }) => {
   const [useVision, setUseVision] = useState(false);
   const [sources, setSources] = useState<string[]>([]);
   const [quality, setQuality] = useState<number>(0);
+  const [copied, setCopied] = useState(false);
 
   const generateNarrative = async () => {
     setLoading(true);
+    setCopied(false);
     try {
       const res = await fetch(`http://localhost:8000/ai/narrative/${patientId}`, {
         method: 'POST',
@@ -25,10 +28,14 @@ export const NarrativeCard: React.FC<NarrativeProps> = ({ patientId }) => {
         setNarrative(data.narrative);
         setSources(data.sources_used || []);
         setQuality(data.data_quality_score || 0);
+      } else if (data.error) {
+        setNarrative(`Error: ${data.error}`);
+        setQuality(0);
       }
     } catch (e) {
       console.error("Narrative gen failed", e);
       setNarrative("Failed to generate narrative. Ensure backend is running.");
+      setQuality(0);
     } finally {
       setLoading(false);
     }
@@ -36,6 +43,20 @@ export const NarrativeCard: React.FC<NarrativeProps> = ({ patientId }) => {
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(narrative);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const getQualityColor = (score: number) => {
+    if (score >= 0.7) return 'text-emerald-400';
+    if (score >= 0.4) return 'text-amber-400';
+    return 'text-red-400';
+  };
+
+  const getQualityLabel = (score: number) => {
+    if (score >= 0.7) return 'High';
+    if (score >= 0.4) return 'Medium';
+    return 'Low';
   };
 
   return (
@@ -48,7 +69,12 @@ export const NarrativeCard: React.FC<NarrativeProps> = ({ patientId }) => {
           <div>
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
               Clinical Narrative
-              {quality > 0.7 && <ShieldCheck size={14} className="text-emerald-500" title="High Data Quality" />}
+              {quality >= 0.7 && narrative && (
+                <ShieldCheck size={14} className="text-emerald-500" title="High Data Quality" />
+              )}
+              {quality > 0 && quality < 0.4 && narrative && (
+                <AlertTriangle size={14} className="text-amber-500" title="Low Data Quality" />
+              )}
             </h3>
             <p className="text-xs text-slate-400">AI-Synthesized from Sorted Data</p>
           </div>
@@ -56,8 +82,8 @@ export const NarrativeCard: React.FC<NarrativeProps> = ({ patientId }) => {
 
         <div className="flex items-center gap-3">
           <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer hover:text-white transition-colors">
-            <input 
-              type="checkbox" 
+            <input
+              type="checkbox"
               checked={useVision}
               onChange={(e) => setUseVision(e.target.checked)}
               className="rounded bg-slate-800 border-slate-600 text-indigo-500 focus:ring-0"
@@ -65,8 +91,8 @@ export const NarrativeCard: React.FC<NarrativeProps> = ({ patientId }) => {
             <Eye size={14} className={useVision ? "text-indigo-400" : ""} />
             <span>Include Documents</span>
           </label>
-          
-          <button 
+
+          <button
             onClick={generateNarrative}
             disabled={loading}
             className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-500 text-white text-sm font-medium rounded-lg transition-all shadow-md shadow-indigo-900/20"
@@ -84,13 +110,17 @@ export const NarrativeCard: React.FC<NarrativeProps> = ({ patientId }) => {
               {narrative}
             </p>
             <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button 
+              <button
                 onClick={copyToClipboard}
-                className="p-2 bg-slate-800 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors"
-                title="Copy to Clipboard"
-                >
+                className={`p-2 rounded text-sm transition-colors ${
+                  copied
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white'
+                }`}
+                title={copied ? "Copied!" : "Copy to Clipboard"}
+              >
                 <Copy size={14} />
-                </button>
+              </button>
             </div>
           </>
         ) : (
@@ -101,19 +131,37 @@ export const NarrativeCard: React.FC<NarrativeProps> = ({ patientId }) => {
         )}
       </div>
 
-      {sources.length > 0 && (
+      {/* Quality Score & Sources */}
+      {narrative && (
         <div className="mt-4 border-t border-slate-800 pt-3">
-          <p className="text-[10px] uppercase font-bold text-slate-500 mb-2">Sources Used:</p>
-          <div className="flex flex-wrap gap-2">
-            {sources.map((src, i) => (
-              <span key={i} className="px-2 py-1 bg-slate-800 rounded text-[10px] text-slate-400 border border-slate-700/50 flex items-center gap-1">
-                {src.includes("Vision") || src.includes("Doc") ? <Eye size={8} /> : <FileText size={8} />}
-                {src}
+          <div className="flex justify-between items-start">
+            {/* Data Quality */}
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] uppercase font-bold text-slate-500">Data Quality:</span>
+              <span className={`text-xs font-semibold ${getQualityColor(quality)}`}>
+                {getQualityLabel(quality)} ({Math.round(quality * 100)}%)
               </span>
-            ))}
+            </div>
+
+            {/* Sources */}
+            {sources.length > 0 && (
+              <div className="flex flex-wrap gap-2 justify-end">
+                {sources.map((src, i) => (
+                  <span
+                    key={i}
+                    className="px-2 py-1 bg-slate-800 rounded text-[10px] text-slate-400 border border-slate-700/50 flex items-center gap-1"
+                  >
+                    {src.includes("Vision") || src.includes("Doc") ? <Eye size={8} /> : <FileText size={8} />}
+                    {src}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
     </div>
   );
 };
+
+export default NarrativeCard;
