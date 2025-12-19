@@ -477,6 +477,11 @@ class MedicationInterpreter(ClinicalInterpreter):
         """Extract medications from generic/unknown format."""
         medications = []
 
+        # Ensure payload is a dict
+        if not isinstance(payload, dict):
+            self._warn(f"Payload is not a dict, got {type(payload).__name__}")
+            return medications
+
         # Try to find any array that looks like medications
         for key in ['medications', 'meds', 'prescriptions', 'drugs']:
             if key in payload:
@@ -492,8 +497,9 @@ class MedicationInterpreter(ClinicalInterpreter):
 
     def _is_antithrombotic(self, name: str, therapeutic_class: str) -> bool:
         """Check if medication is an antithrombotic (critical for vascular surgery)."""
-        name_lower = name.lower()
-        class_lower = therapeutic_class.lower() if therapeutic_class else ''
+        # Ensure we have strings, not ints or other types
+        name_lower = str(name).lower() if name else ''
+        class_lower = str(therapeutic_class).lower() if therapeutic_class else ''
 
         # Check drug name
         for keyword in self.ANTITHROMBOTIC_KEYWORDS:

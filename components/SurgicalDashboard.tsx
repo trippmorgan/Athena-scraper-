@@ -1,10 +1,11 @@
 import { NarrativeCard } from './NarrativeCard';
 import { RawDataViewer } from './RawDataViewer';
 import React, { useState, useEffect } from 'react';
-import { 
-  Search, AlertTriangle, CheckCircle2, XCircle, Clock, 
+import {
+  Search, AlertTriangle, CheckCircle2, XCircle, Clock,
   Pill, Heart, Droplets, FileText, Activity, Syringe,
-  AlertOctagon, Stethoscope, Scissors, ClipboardList, Trash2
+  AlertOctagon, Stethoscope, Scissors, ClipboardList, Trash2,
+  FolderOpen, Copy, DollarSign, ExternalLink
 } from 'lucide-react';
 
 // Types
@@ -24,12 +25,22 @@ interface Diagnosis {
   onset_date?: string;
 }
 
+interface Document {
+  id: string;
+  title: string;
+  category: string;
+  date?: string;
+  author?: string;
+  url?: string;
+}
+
 interface VascularProfile {
   patient_id: string;
   mrn: string;
   name: string;
   antithrombotics: AntithromboticMed[];
   diagnoses: Diagnosis[];
+  documents: Document[];
   renal_function?: {
     creatinine?: number;
     egfr?: number;
@@ -79,7 +90,7 @@ interface PreOpChecklist {
   blocking_issues: string[];
 }
 
-type SurgicalPhase = 'preop' | 'intraop' | 'postop';
+type SurgicalPhase = 'preop' | 'intraop' | 'postop' | 'notes' | 'billing';
 
 interface SurgicalDashboardProps {
   onSearch?: (mrn: string) => void;
@@ -270,7 +281,7 @@ export const SurgicalDashboard: React.FC<SurgicalDashboardProps> = ({ onSearch }
 
         {/* Phase Tabs */}
         <div className="flex gap-2 mt-4">
-          {(['preop', 'intraop', 'postop'] as SurgicalPhase[]).map((phase) => (
+          {(['preop', 'intraop', 'postop', 'notes', 'billing'] as SurgicalPhase[]).map((phase) => (
             <button
               key={phase}
               onClick={() => setActivePhase(phase)}
@@ -283,7 +294,9 @@ export const SurgicalDashboard: React.FC<SurgicalDashboardProps> = ({ onSearch }
               {phase === 'preop' && <ClipboardList size={16} />}
               {phase === 'intraop' && <Scissors size={16} />}
               {phase === 'postop' && <Activity size={16} />}
-              {phase === 'preop' ? 'Pre-Op' : phase === 'intraop' ? 'Intra-Op' : 'Post-Op'}
+              {phase === 'notes' && <FolderOpen size={16} />}
+              {phase === 'billing' && <DollarSign size={16} />}
+              {phase === 'preop' ? 'Pre-Op' : phase === 'intraop' ? 'Intra-Op' : phase === 'postop' ? 'Post-Op' : phase === 'notes' ? 'Notes' : 'Billing'}
             </button>
           ))}
         </div>
@@ -652,6 +665,171 @@ export const SurgicalDashboard: React.FC<SurgicalDashboardProps> = ({ onSearch }
                   ✓ Standard post-vascular monitoring protocol
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* NOTES VIEW - Document Repository */}
+        {profile && activePhase === 'notes' && (
+          <div className="space-y-4">
+            <div className="bg-slate-900 rounded-lg p-4 border border-slate-800">
+              <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-300 mb-3">
+                <FolderOpen size={16} className="text-cyan-400" />
+                CLINICAL DOCUMENTS
+                {profile.documents?.length > 0 && (
+                  <span className="ml-auto text-xs px-2 py-0.5 bg-cyan-500/20 text-cyan-400 rounded">
+                    {profile.documents.length} documents
+                  </span>
+                )}
+              </h3>
+
+              {/* Category Filters */}
+              <div className="flex flex-wrap gap-2 mb-4">
+                {['All', 'CTA', 'CT/MRI', 'Ultrasound', 'Operative', 'Pathology', 'Lab', 'Note'].map((cat) => (
+                  <button
+                    key={cat}
+                    className="px-3 py-1 text-xs rounded-full bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200 transition-colors"
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+
+              {/* Document List */}
+              {profile.documents?.length > 0 ? (
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {profile.documents.map((doc, i) => {
+                    // Detect SSO redirect links (external vendor portals)
+                    const isSsoLink = doc.url?.includes('ssoredirect.esp') || doc.url?.includes('sso_redirect');
+
+                    return (
+                      <div key={doc.id || i} className="flex justify-between items-start p-3 bg-slate-800/50 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="px-2 py-0.5 text-xs bg-cyan-500/20 text-cyan-400 rounded">
+                              {doc.category}
+                            </span>
+                            {isSsoLink && (
+                              <span className="px-2 py-0.5 text-xs bg-amber-500/20 text-amber-400 rounded flex items-center gap-1">
+                                🔗 External Portal
+                              </span>
+                            )}
+                            <span className="font-medium text-white text-sm">{doc.title}</span>
+                          </div>
+                          <div className="flex gap-4 mt-1 text-xs text-slate-500">
+                            {doc.date && <span>{doc.date}</span>}
+                            {doc.author && <span>By: {doc.author}</span>}
+                            {isSsoLink && (
+                              <span className="text-amber-500">Opens in vendor portal</span>
+                            )}
+                          </div>
+                        </div>
+                        {doc.url && (
+                          <a
+                            href={doc.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={`flex items-center gap-1 ${isSsoLink ? 'text-amber-400 hover:text-amber-300' : 'text-cyan-400 hover:text-cyan-300'}`}
+                            title={isSsoLink ? 'Opens external vendor portal (SSO)' : 'Open document'}
+                          >
+                            {isSsoLink ? (
+                              <ExternalLink size={16} />
+                            ) : (
+                              <FileText size={16} />
+                            )}
+                          </a>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-slate-500">No clinical documents found</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* BILLING VIEW - ICD-10 Linker */}
+        {profile && activePhase === 'billing' && (
+          <div className="space-y-4">
+            <div className="bg-slate-900 rounded-lg p-4 border border-slate-800">
+              <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-300 mb-3">
+                <DollarSign size={16} className="text-emerald-400" />
+                ICD-10 CODE LINKER
+                {profile.diagnoses?.filter(d => d.icd10_code).length > 0 && (
+                  <span className="ml-auto text-xs px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded">
+                    {profile.diagnoses.filter(d => d.icd10_code).length} codes
+                  </span>
+                )}
+              </h3>
+
+              {/* Quick Copy All Codes */}
+              <div className="mb-4">
+                <button
+                  onClick={() => {
+                    const codes = profile.diagnoses
+                      ?.filter(d => d.icd10_code)
+                      .map(d => d.icd10_code)
+                      .join(', ');
+                    if (codes) {
+                      navigator.clipboard.writeText(codes);
+                    }
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-medium transition-colors"
+                >
+                  <Copy size={14} />
+                  Copy All Codes
+                </button>
+              </div>
+
+              {/* Diagnoses with ICD-10 Codes */}
+              {profile.diagnoses?.filter(d => d.icd10_code).length > 0 ? (
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {profile.diagnoses.filter(d => d.icd10_code).map((dx, i) => (
+                    <div key={i} className="flex justify-between items-center p-3 bg-slate-800/50 rounded-lg group">
+                      <div className="flex-1">
+                        <span className="font-medium text-white text-sm">{dx.name}</span>
+                        {dx.status && dx.status !== 'active' && (
+                          <span className="ml-2 text-xs text-slate-500">({dx.status})</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="px-3 py-1 text-sm bg-emerald-500/20 text-emerald-400 rounded font-mono">
+                          {dx.icd10_code}
+                        </span>
+                        <button
+                          onClick={() => {
+                            if (dx.icd10_code) {
+                              navigator.clipboard.writeText(dx.icd10_code);
+                            }
+                          }}
+                          className="p-1.5 text-slate-500 hover:text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Copy code"
+                        >
+                          <Copy size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-slate-500">No ICD-10 codes available</p>
+              )}
+
+              {/* Diagnoses without ICD-10 Codes */}
+              {profile.diagnoses?.filter(d => !d.icd10_code).length > 0 && (
+                <div className="mt-6">
+                  <h4 className="text-xs font-semibold text-slate-500 mb-2">DIAGNOSES WITHOUT ICD-10 CODES</h4>
+                  <div className="space-y-1">
+                    {profile.diagnoses.filter(d => !d.icd10_code).map((dx, i) => (
+                      <div key={i} className="p-2 bg-slate-800/30 rounded text-sm text-slate-400">
+                        {dx.name}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

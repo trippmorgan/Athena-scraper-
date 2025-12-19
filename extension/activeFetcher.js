@@ -187,12 +187,29 @@
   // ============================================================
   // FETCH UTILITIES
   // ============================================================
-  
+
+  // Get captured session headers from injected.js interceptor
+  function getSessionHeaders() {
+    if (window.__shadowEhrSession && window.__shadowEhrSession.hasValidSession()) {
+      const headers = window.__shadowEhrSession.getHeaders();
+      Logger.success('Using captured session headers:', Object.keys(headers).join(', '));
+      return headers;
+    }
+    Logger.warn('No captured session headers - active fetch may fail with 500 error');
+    return {};
+  }
+
   async function authenticatedFetch(endpoint, options = {}) {
     const url = endpoint.startsWith('http') ? endpoint : `${ATHENA_CONFIG.baseUrl}${endpoint}`;
-    
+
+    // Get session headers captured from passive intercepts (CSRF token, session ID, etc.)
+    const sessionHeaders = getSessionHeaders();
+
     Logger.fetch(`Fetching: ${url}`);
-    
+    if (Object.keys(sessionHeaders).length > 0) {
+      Logger.fetch('With session headers:', Object.keys(sessionHeaders));
+    }
+
     try {
       const response = await fetch(url, {
         ...options,
@@ -200,7 +217,8 @@
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json',
-          ...options.headers
+          ...sessionHeaders,  // Include captured CSRF/session headers
+          ...options.headers  // Allow override
         }
       });
 

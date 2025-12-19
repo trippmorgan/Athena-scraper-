@@ -176,6 +176,33 @@ async def get_vascular_profile(patient_id: str):
             timestamp=datetime.now().isoformat()
         )
 
+    # Try to build profile from raw events file (for testing/offline mode)
+    try:
+        logger.info(f"[PROFILE] Building from raw events for {patient_id}")
+        parser_input = {
+            "demographics": {"data": {}},
+            "patient": {},
+            "medications": {"data": []},
+            "problems": {"data": []},
+            "labs": {"data": []},
+            "notes": {"data": []},
+            "procedures": {"data": []},
+            "allergies": {"data": []},
+            "documents": {"data": []},
+            "unknown": [],
+        }
+        profile = build_vascular_profile(patient_id, parser_input)
+        logger.info(f"[PROFILE] Built from raw events: {len(profile.documents)} docs")
+        if profile.documents:
+            vascular_profiles[patient_id] = profile  # Cache for future requests
+            return VascularProfileResponse(
+                success=True,
+                profile=profile,
+                timestamp=datetime.now().isoformat()
+            )
+    except Exception as e:
+        logger.error(f"[PROFILE] Failed to build from raw events: {e}")
+
     return VascularProfileResponse(
         success=False,
         error="Profile not found. Navigate to patient chart in Athena first.",

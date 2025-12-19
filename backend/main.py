@@ -51,6 +51,7 @@ from vascular_extractors import (
     VascularAssessment, PADExtractor, CarotidExtractor, AAAExtractor,
     AntithromboticBridgingCalculator, ANTITHROMBOTIC_DATABASE
 )
+from vascular_parser import build_vascular_profile
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -1882,6 +1883,175 @@ async def generate_preop_summary(request: dict):
         "assessment": assessment.to_dict(),
         "preop_summary": assessment.generate_preop_summary(),
     }
+
+
+# ==============================================================================
+# VASCULAR PROFILE ENDPOINT (for SurgicalDashboard UI)
+# ==============================================================================
+
+@app.get("/active/profile/{patient_id}")
+async def get_vascular_profile(patient_id: str):
+    """
+    Get VascularProfile for the SurgicalDashboard UI.
+
+    Uses the Data Separation Layer to build a clean, typed profile
+    from raw cache data.
+    """
+    logger.info(f"[PROFILE] Fetching VascularProfile for patient {patient_id}")
+
+    # Get raw cache data
+    cache = manager.patient_cache.get(patient_id)
+    if not cache:
+        logger.warning(f"[PROFILE] No cache found for patient {patient_id}")
+        return {"success": False, "error": "Patient not in cache. Use /active/profile endpoint instead.", "profile": None}
+
+    logger.info(f"[PROFILE] Cache keys: {list(cache.keys())}")
+
+    # Transform cache to parser input format
+    parser_input = {
+        "demographics": {"data": cache.get("patient") or {}},
+        "patient": cache.get("patient") or {},
+        "medications": {"data": cache.get("medications") or []},
+        "problems": {"data": cache.get("problems") or []},
+        "labs": {"data": cache.get("labs") or []},
+        "notes": {"data": cache.get("notes") or []},
+        "procedures": {"data": cache.get("surgical_history") or []},
+        "allergies": {"data": cache.get("allergies") or []},
+        "documents": {"data": cache.get("documents") or []},
+        "unknown": cache.get("unknown") or [],
+    }
+
+    # Also merge interpreted data if available
+    if patient_id in manager.clinical_cache:
+        interp_data = manager.clinical_cache[patient_id]
+        if 'medication' in interp_data:
+            existing_meds = parser_input["medications"]["data"] or []
+            if isinstance(existing_meds, list):
+                parser_input["medications"]["data"] = existing_meds + interp_data['medication']
+        if 'problem' in interp_data:
+            existing_probs = parser_input["problems"]["data"] or []
+            if isinstance(existing_probs, list):
+                parser_input["problems"]["data"] = existing_probs + interp_data['problem']
+
+    logger.info(f"[PROFILE] Parser input prepared with {len(parser_input.get('unknown', []))} unknown items")
+
+    try:
+        # Build the VascularProfile using the Data Separation Layer
+        profile = build_vascular_profile(patient_id, parser_input)
+
+        # Convert to dict for JSON serialization
+        profile_dict = profile.model_dump()
+
+        logger.info(f"[PROFILE] VascularProfile built: name={profile.name}, "
+                   f"diagnoses={len(profile.diagnoses)}, "
+                   f"antithrombotics={len(profile.antithrombotics)}, "
+                   f"documents={len(profile.documents)}")
+
+        return {
+            "success": True,
+            "profile": profile_dict
+        }
+    except Exception as e:
+        logger.error(f"[PROFILE] Failed to build VascularProfile: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "error": str(e), "profile": None}
+
+
+@app.get("/active/preop-checklist/{patient_id}")
+async def get_preop_checklist(patient_id: str):
+    """
+    Get pre-op surgical checklist for the SurgicalDashboard UI.
+    """
+    logger.info(f"[CHECKLIST] Fetching preop checklist for patient {patient_id}")
+
+    # Get the profile first
+    cache = manager.patient_cache.get(patient_id)
+    if not cache:
+        return {"error": "Patient not in cache"}
+
+    # Transform cache to parser input format
+    parser_input = {
+        "demographics": {"data": cache.get("patient") or {}},
+        "patient": cache.get("patient") or {},
+        "medications": {"data": cache.get("medications") or []},
+        "problems": {"data": cache.get("problems") or []},
+        "labs": {"data": cache.get("labs") or []},
+        "allergies": {"data": cache.get("allergies") or []},
+        "unknown": cache.get("unknown") or [],
+    }
+
+    try:
+        profile = build_vascular_profile(patient_id, parser_input)
+
+        # Build checklist from profile
+        blocking_issues = []
+
+        # Check antithrombotics
+        anticoag_held = True
+        anticoag_details = "No anticoagulants on record"
+        bridging_required = False
+
+        for med in profile.antithrombotics:
+            if med.category in ['vka', 'doac']:
+                anticoag_details = f"{med.name} - Hold {med.hold_days_preop} days pre-op"
+                if med.bridging_required:
+                    bridging_required = True
+                    blocking_issues.append(f"Bridging required for {med.name}")
+
+        # Check renal function
+        renal_ok = True
+        renal_details = "No recent labs"
+        if profile.renal_function:
+            if profile.renal_function.contrast_risk in ['high', 'contraindicated']:
+                renal_ok = False
+                blocking_issues.append(f"Contrast risk: {profile.renal_function.contrast_risk}")
+            renal_details = f"Cr: {profile.renal_function.creatinine or 'N/A'}, eGFR: {profile.renal_function.egfr or 'N/A'}"
+
+        # Check coagulation
+        coag_ok = True
+        coag_details = "No coag panel"
+        if profile.coagulation:
+            if profile.coagulation.reversal_needed:
+                coag_ok = False
+                blocking_issues.append("INR elevated - reversal may be needed")
+            coag_details = f"INR: {profile.coagulation.inr or 'N/A'}"
+
+        # Check cardiac
+        cardiac_cleared = profile.cardiac_risk == 'cleared'
+        cardiac_details = f"Cardiac risk: {profile.cardiac_risk}"
+        if profile.cardiac_risk == 'high':
+            blocking_issues.append("High cardiac risk - consider cardiology clearance")
+
+        # Check allergies
+        contrast_allergy = any('contrast' in a.allergen.lower() for a in profile.critical_allergies)
+        allergy_alerts = [a.allergen for a in profile.critical_allergies]
+        if contrast_allergy:
+            blocking_issues.append("Contrast allergy - pre-medicate or use alternative")
+
+        ready = len(blocking_issues) == 0
+
+        return {
+            "patient_id": patient_id,
+            "mrn": profile.mrn,
+            "name": profile.name,
+            "antithrombotics_held": anticoag_held,
+            "anticoagulant_details": anticoag_details,
+            "bridging_required": bridging_required,
+            "renal_function_ok": renal_ok,
+            "renal_details": renal_details,
+            "coagulation_ok": coag_ok,
+            "coagulation_details": coag_details,
+            "cardiac_cleared": cardiac_cleared,
+            "cardiac_details": cardiac_details,
+            "contrast_allergy": contrast_allergy,
+            "allergy_alerts": allergy_alerts,
+            "ready_for_surgery": ready,
+            "blocking_issues": blocking_issues,
+        }
+    except Exception as e:
+        logger.error(f"[CHECKLIST] Failed: {e}")
+        return {"error": str(e)}
 
 
 if __name__ == "__main__":

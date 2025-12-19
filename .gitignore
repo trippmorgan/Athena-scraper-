@@ -34,3 +34,7 @@ backend/data/*.json
 backend/data/*.jsonl
 
 **/__pycache__/
+data/*.json
+data/*.jsonl
+*.log
+shadow_ehr.log.*

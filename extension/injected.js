@@ -38,6 +38,62 @@
     errors: 0
   };
 
+  // ============================================================
+  // SESSION HEADER CAPTURE - Stores CSRF/session headers for active fetch
+  // ============================================================
+  const capturedSessionHeaders = {
+    'X-CSRF-Token': null,
+    'X-Athena-Session-ID': null,
+    'X-Athena-Clientid': null,
+    'X-Requested-With': null,
+    lastUpdated: null,
+
+    // Store captured headers
+    capture(headers) {
+      const headersToCapture = ['x-csrf-token', 'x-athena-session-id', 'x-athena-clientid', 'x-requested-with'];
+      let captured = false;
+
+      for (const [key, value] of headers) {
+        const lowerKey = key.toLowerCase();
+        if (headersToCapture.includes(lowerKey)) {
+          // Normalize key to standard format
+          const normalizedKey = lowerKey === 'x-csrf-token' ? 'X-CSRF-Token' :
+                               lowerKey === 'x-athena-session-id' ? 'X-Athena-Session-ID' :
+                               lowerKey === 'x-athena-clientid' ? 'X-Athena-Clientid' :
+                               'X-Requested-With';
+
+          if (this[normalizedKey] !== value) {
+            this[normalizedKey] = value;
+            captured = true;
+            InjectedLogger.success(`Captured header: ${normalizedKey}`, value.substring(0, 20) + '...');
+          }
+        }
+      }
+
+      if (captured) {
+        this.lastUpdated = new Date().toISOString();
+      }
+      return captured;
+    },
+
+    // Get headers object for use in active fetch
+    getHeaders() {
+      const headers = {};
+      if (this['X-CSRF-Token']) headers['X-CSRF-Token'] = this['X-CSRF-Token'];
+      if (this['X-Athena-Session-ID']) headers['X-Athena-Session-ID'] = this['X-Athena-Session-ID'];
+      if (this['X-Athena-Clientid']) headers['X-Athena-Clientid'] = this['X-Athena-Clientid'];
+      if (this['X-Requested-With']) headers['X-Requested-With'] = this['X-Requested-With'];
+      return headers;
+    },
+
+    hasValidSession() {
+      return !!(this['X-CSRF-Token'] || this['X-Athena-Session-ID']);
+    }
+  };
+
+  // Expose captured headers globally for activeFetcher.js
+  window.__shadowEhrSession = capturedSessionHeaders;
+
   InjectedLogger.info('═'.repeat(50));
   InjectedLogger.info('Shadow EHR Interceptor Initializing...');
   InjectedLogger.info('Running in Main World context');
@@ -122,6 +178,19 @@
 
     InjectedLogger.debug(`fetch() called: ${method} ${url.substring(0, 50)}...`);
 
+    // CAPTURE REQUEST HEADERS from Athena API calls (before the fetch completes)
+    // This captures the CSRF token and session headers that Athena's app includes
+    if (shouldIntercept(url) && config?.headers) {
+      try {
+        const headers = config.headers instanceof Headers
+          ? config.headers
+          : new Headers(config.headers);
+        capturedSessionHeaders.capture(headers);
+      } catch (e) {
+        InjectedLogger.debug('Could not parse request headers:', e.message);
+      }
+    }
+
     const response = await originalFetch.apply(this, args);
 
     // Clone response to read body without consuming the stream for the app
@@ -155,9 +224,27 @@
   // --- 2. Hook XMLHttpRequest (Legacy Athena components) ---
   InjectedLogger.debug('Patching XMLHttpRequest...');
 
+  // Store for XHR request headers
+  const xhrSetRequestHeader = XHR.setRequestHeader;
+
+  XHR.setRequestHeader = function(name, value) {
+    // Capture session headers from XHR calls
+    if (!this._shadowHeaders) this._shadowHeaders = new Map();
+    this._shadowHeaders.set(name, value);
+
+    // Check if this is a session header to capture
+    const lowerName = name.toLowerCase();
+    if (['x-csrf-token', 'x-athena-session-id', 'x-athena-clientid', 'x-requested-with'].includes(lowerName)) {
+      capturedSessionHeaders.capture([[name, value]]);
+    }
+
+    return xhrSetRequestHeader.apply(this, arguments);
+  };
+
   XHR.open = function(method, url) {
     this._shadowMethod = method;
     this._shadowUrl = url;
+    this._shadowHeaders = new Map(); // Reset headers for new request
     InjectedLogger.debug(`XHR.open(): ${method} ${url ? url.substring(0, 50) : 'N/A'}...`);
     return open.apply(this, arguments);
   };
