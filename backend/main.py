@@ -600,7 +600,28 @@ class ConnectionManager:
             cache['unknown'].append({'type': record_type, 'data': fhir_resource})
             logger.debug(f"  Unknown record type '{record_type}' stored")
 
+            # POST-PROCESS: Extract patient data from unknown items if cache['patient'] is empty
+            if isinstance(fhir_resource, dict):
+                # Check if this unknown item contains patient demographics
+                patient_data = fhir_resource.get('patient')
+                if patient_data and isinstance(patient_data, dict) and not cache.get('patient'):
+                    # Found patient data in unknown - extract it!
+                    logger.info(f"  🔍 RECOVERED patient data from unknown: {patient_data.get('LastName', 'Unknown')}")
+                    cache['patient'] = patient_data
+
         cache['last_update'] = datetime.now().isoformat()
+
+        # FINAL RECOVERY: If cache['patient'] still empty, scan all unknown items
+        if not cache.get('patient'):
+            for item in cache.get('unknown', []):
+                if isinstance(item, dict):
+                    data = item.get('data', {})
+                    if isinstance(data, dict) and 'patient' in data:
+                        patient_info = data['patient']
+                        if isinstance(patient_info, dict) and patient_info.get('LastName'):
+                            logger.info(f"  🔍 RECOVERED patient from unknown scan: {patient_info.get('LastName')}")
+                            cache['patient'] = patient_info
+                            break
 
         # Build and emit patient update
         patient = build_patient_from_aggregated_data(

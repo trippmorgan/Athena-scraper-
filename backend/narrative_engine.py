@@ -110,19 +110,21 @@ class NarrativeEngine:
 
         prompt = f"""
 ROLE: Expert Vascular Surgeon's Scribe.
-TASK: Write the "History of Present Illness" (HPI) opening paragraph.
+TASK: Write a comprehensive clinical summary for a vascular surgery patient.
 
 INPUT DATA (Sorted & Verified):
 {llm_context}
 
 INSTRUCTIONS:
-1. Start EXACTLY with: "This is a [AGE] year-old [GENDER]..."
-2. List ONLY relevant comorbidities (HTN, HLD, DM, CAD, CKD, COPD, Smoking). Use concise abbreviations.
-3. Summarize Surgical History chronologically. If dates are known, use them. If not, say "history of...".
-4. Mention critical vascular medications (Antiplatelets/Anticoagulants) only if active.
-5. Incorporate insights extracted from documents if they add specific dates or procedures not in the structured data.
-6. Style: Professional, medical, concise. No bullet points. Max 4 sentences.
-7. If age or gender is unknown, omit those details gracefully.
+1. Start with: "This is a [AGE] year-old [GENDER] (DOB: [DOB]) with a history of..."
+   - Example: "This is a 64 year-old female (DOB: 10/10/1960) with a history of..."
+2. Include ALL vascular diagnoses with their ICD-10 codes in parentheses, e.g., "peripheral arterial disease (ICD-10: I70.213)"
+3. List relevant comorbidities using standard abbreviations (HTN, HLD, DM, CAD, CKD, COPD, AFib, tobacco use)
+4. Include presenting complaints: rest pain, claudication, ulcers, etc. with ICD-10 codes when available
+5. Mention active antithrombotic medications (Antiplatelets/Anticoagulants)
+6. Include surgical/vascular history if documented
+7. Style: Professional, thorough, suitable for surgical documentation
+8. ALWAYS include patient demographics (age, sex, DOB) at the start if available
 
 OUTPUT:
 """
@@ -169,10 +171,73 @@ OUTPUT:
         Output (vascular_parser format):
             {'demographics': {'data': {...}}, 'medications': {'data': [...]}, ...}
         """
+        # Try to recover patient data from 'unknown' if not in 'patient' field
+        patient_data = raw_cache.get("patient") or {}
+        if not patient_data:
+            # Search unknown items for patient demographics
+            unknown_items = raw_cache.get("unknown") or []
+            for item in unknown_items:
+                if isinstance(item, dict):
+                    data = item.get("data", {})
+                    if isinstance(data, dict) and "patient" in data:
+                        patient_data = data["patient"]
+                        logger.info(f"[NARRATIVE] Recovered patient data from unknown: {patient_data.get('LastName', 'Unknown')}")
+                        break
+
+        # Transform Athena format to FHIR-like format if needed
+        if patient_data and "LastName" in patient_data:
+            # Convert Athena format to standard format
+            dob_obj = patient_data.get("BirthDate", {})
+            dob = dob_obj.get("Date") if isinstance(dob_obj, dict) else dob_obj
+            patient_data = {
+                "name": patient_data.get("LastName", "Unknown"),
+                "birthDate": dob,
+                "gender": patient_data.get("Sex", "unknown").lower(),
+            }
+
+        # Get problems from cache
+        problems_data = raw_cache.get("problems") or []
+
+        # RECOVER DIAGNOSES: If problems empty, extract from historical_clinical_encounters in unknown
+        if not problems_data:
+            unknown_items = raw_cache.get("unknown") or []
+            recovered_diagnoses = []
+            seen_names = set()
+
+            for item in unknown_items:
+                if isinstance(item, dict):
+                    data = item.get("data", {})
+                    if isinstance(data, dict):
+                        # Check both historical and initial encounters
+                        encounters = (data.get("historical_clinical_encounters", []) +
+                                     data.get("initial_historical_clinical_encounters", []))
+                        for enc in encounters:
+                            diagnoses = enc.get("Diagnoses", [])
+                            for dx in diagnoses:
+                                name = dx.get("Name", "")
+                                if name and name not in seen_names:
+                                    seen_names.add(name)
+                                    # Extract ICD-10 code
+                                    icd_codes = dx.get("SnomedICDCodes", [])
+                                    icd10 = next((c.get("Code") for c in icd_codes
+                                                 if c.get("CodeSet") == "ICD10"), None)
+                                    snomed = dx.get("Code", {}).get("Code") if isinstance(dx.get("Code"), dict) else None
+
+                                    recovered_diagnoses.append({
+                                        "display_name": name,
+                                        "icd10_code": icd10,
+                                        "snomed_code": snomed,
+                                        "clinical_status": "active"
+                                    })
+
+            if recovered_diagnoses:
+                logger.info(f"[NARRATIVE] RECOVERED {len(recovered_diagnoses)} diagnoses from historical encounters")
+                problems_data = recovered_diagnoses
+
         return {
-            "demographics": {"data": raw_cache.get("patient") or {}},
+            "demographics": {"data": patient_data},
             "medications": {"data": raw_cache.get("medications") or []},
-            "problems": {"data": raw_cache.get("problems") or []},
+            "problems": {"data": problems_data},
             "labs": {"data": raw_cache.get("labs") or []},
             "notes": {"data": raw_cache.get("notes") or raw_cache.get("note") or []},
             "procedures": {"data": raw_cache.get("surgical_history") or raw_cache.get("procedures") or []},
@@ -190,36 +255,73 @@ OUTPUT:
         Converts the typed VascularProfile into a clean text block.
         This is the ONLY thing the LLM sees - no raw JSON.
         """
-        # Extract demographics from raw cache for age/gender
+        # Extract demographics - check both 'patient' field and 'unknown' array
         patient_data = raw_cache.get("patient") or {}
 
+        # If patient is empty, search in unknown array (same as _transform_cache_to_parser_input)
+        if not patient_data:
+            unknown_items = raw_cache.get("unknown") or []
+            for item in unknown_items:
+                if isinstance(item, dict):
+                    data = item.get("data", {})
+                    if isinstance(data, dict) and "patient" in data:
+                        patient_data = data["patient"]
+                        break
+
+        # Handle Athena format (LastName, BirthDate, Sex) vs FHIR format (name, birthDate, gender)
+        if "LastName" in patient_data:
+            # Athena format
+            dob_obj = patient_data.get("BirthDate", {})
+            dob = dob_obj.get("Date") if isinstance(dob_obj, dict) else dob_obj
+            gender = (patient_data.get("Sex") or patient_data.get("GenderMarker") or "unknown").lower()
+            if gender == "f":
+                gender = "female"
+            elif gender == "m":
+                gender = "male"
+        else:
+            # FHIR format
+            dob = patient_data.get("birthDate") or patient_data.get("dob")
+            gender = patient_data.get("gender", "unknown")
+
         # Calculate age
-        dob = patient_data.get("birthDate") or patient_data.get("dob")
         age = "Unknown age"
+        dob_str = None
         if dob:
             try:
                 bday = datetime.strptime(str(dob), "%Y-%m-%d")
                 age = f"{(datetime.now() - bday).days // 365} years old"
+                dob_str = bday.strftime("%m/%d/%Y")
             except Exception:
-                pass
+                dob_str = str(dob)
 
-        gender = patient_data.get("gender", "unknown")
+        # Format diagnoses WITH ICD-10 codes - separate into categories
+        vascular_keywords = ["atherosclerosis", "arterial", "venous", "vascular", "aneurysm",
+                             "stenosis", "occlusion", "claudication", "ischemic", "ulcer",
+                             "pvd", "pad", "carotid", "aortic", "bypass", "stent"]
+        comorbidity_keywords = ["hypertension", "htn", "diabetes", "dm", "hyperlipidemia",
+                                "hld", "cad", "coronary", "ckd", "chronic kidney",
+                                "copd", "smoking", "tobacco", "afib", "atrial fibrillation",
+                                "heart", "cardiac"]
 
-        # Format diagnoses - filter for active, focus on relevant comorbidities
-        vascular_comorbidities = ["hypertension", "htn", "diabetes", "dm", "hyperlipidemia",
-                                   "hld", "cad", "coronary", "ckd", "chronic kidney",
-                                   "copd", "smoking", "tobacco", "afib", "atrial fibrillation",
-                                   "pvd", "pad", "peripheral"]
+        def format_dx_with_icd(dx):
+            """Format diagnosis with ICD-10 code if available."""
+            if dx.icd10_code:
+                return f"{dx.name} (ICD-10: {dx.icd10_code})"
+            return dx.name
 
-        relevant_dx = []
+        vascular_dx = []
+        comorbidity_dx = []
         other_dx = []
         for dx in profile.diagnoses:
             if dx.status == "active":
                 dx_lower = dx.name.lower()
-                if any(term in dx_lower for term in vascular_comorbidities):
-                    relevant_dx.append(dx.name)
+                formatted = format_dx_with_icd(dx)
+                if any(term in dx_lower for term in vascular_keywords):
+                    vascular_dx.append(formatted)
+                elif any(term in dx_lower for term in comorbidity_keywords):
+                    comorbidity_dx.append(formatted)
                 else:
-                    other_dx.append(dx.name)
+                    other_dx.append(formatted)
 
         # Format antithrombotics
         meds = [f"{m.name} ({m.category})" for m in profile.antithrombotics]
@@ -236,16 +338,30 @@ OUTPUT:
         allergies = [f"{a.allergen}: {a.surgical_implication or 'caution'}"
                      for a in profile.critical_allergies]
 
+        # Format all diagnoses as a comprehensive list
+        all_dx_formatted = []
+        for dx in profile.diagnoses:
+            if dx.status == "active":
+                all_dx_formatted.append(format_dx_with_icd(dx))
+
         context = f"""
 PATIENT: {profile.name}
 MRN: {profile.mrn}
-DEMOGRAPHICS: {age}, {gender}
+DOB: {dob_str if dob_str else "Unknown"}
+AGE: {age}
+SEX: {gender.upper() if gender != "unknown" else "Unknown"}
 
-VERIFIED VASCULAR COMORBIDITIES:
-{", ".join(relevant_dx[:10]) if relevant_dx else "None specifically documented"}
+VASCULAR DIAGNOSES:
+{chr(10).join(f"- {d}" for d in vascular_dx) if vascular_dx else "None documented"}
+
+CARDIOVASCULAR RISK FACTORS/COMORBIDITIES:
+{chr(10).join(f"- {d}" for d in comorbidity_dx) if comorbidity_dx else "None documented"}
 
 OTHER ACTIVE DIAGNOSES:
-{", ".join(other_dx[:10]) if other_dx else "None"}
+{chr(10).join(f"- {d}" for d in other_dx) if other_dx else "None"}
+
+ALL DIAGNOSES WITH ICD-10 CODES:
+{chr(10).join(f"- {d}" for d in all_dx_formatted) if all_dx_formatted else "None"}
 
 ACTIVE ANTITHROMBOTICS:
 {", ".join(meds) if meds else "None documented"}
@@ -266,17 +382,31 @@ DOCUMENT EXTRACTIONS (Vision):
         Uses Vision model to read documents/images in the artifact store.
         """
         if not self.client:
+            logger.info("[NARRATIVE] No Gemini client, skipping vision extraction")
             return "", []
 
-        store = get_artifact_store()
-        artifacts = store.list_by_patient(patient_id)
+        try:
+            store = get_artifact_store()
+            if store is None:
+                logger.warning("[NARRATIVE] Artifact store is None")
+                return "", []
 
-        # Sort by date, take top 3 most recent
-        recent_artifacts = sorted(
-            artifacts,
-            key=lambda x: x.stored_at or "",
-            reverse=True
-        )[:3]
+            artifacts = store.list_by_patient(patient_id)
+            if artifacts is None:
+                logger.warning("[NARRATIVE] list_by_patient returned None")
+                return "", []
+
+            logger.info(f"[NARRATIVE] Found {len(artifacts)} artifacts for patient {patient_id}")
+
+            # Sort by date, take top 3 most recent
+            recent_artifacts = sorted(
+                [a for a in artifacts if a is not None],
+                key=lambda x: x.stored_at or "",
+                reverse=True
+            )[:3]
+        except Exception as e:
+            logger.error(f"[NARRATIVE] Error accessing artifact store: {e}")
+            return "", []
 
         extracted_info = []
         sources = []
@@ -320,12 +450,13 @@ DOCUMENT EXTRACTIONS (Vision):
         """
         score = 0.0
 
-        # Patient demographics
+        # Patient demographics - handle explicit None values
+        patient_data = raw_cache.get("patient") or {}
         if profile.name and profile.name != "Unknown":
             score += 0.15
-        if raw_cache.get("patient", {}).get("birthDate"):
+        if patient_data.get("birthDate"):
             score += 0.10
-        if raw_cache.get("patient", {}).get("gender"):
+        if patient_data.get("gender"):
             score += 0.05
 
         # Clinical data

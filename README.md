@@ -42,6 +42,7 @@ cd athena-shadow-ehr
 # 2. Install backend dependencies
 cd backend
 pip install -r requirements.txt
+conda activate shadow-ehr
 
 # 3. Configure API keys (edit .env)
 cp .env.example .env
