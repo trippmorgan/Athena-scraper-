@@ -332,7 +332,7 @@ class ConnectionManager:
             # Send log entry to frontend
             await self.broadcast_to_frontend({
                 "type": "LOG_ENTRY",
-                "data": log_entry.dict()
+                "data": log_entry.model_dump()
             })
             logger.info("LOG_ENTRY sent to frontend")
 
@@ -468,14 +468,14 @@ class ConnectionManager:
 
         if record_type == 'patient':
             if hasattr(fhir_resource, 'dict'):
-                cache['patient'] = fhir_resource.dict()
+                cache['patient'] = fhir_resource.model_dump()
             else:
                 cache['patient'] = fhir_resource
             logger.info(f"  Patient demographics updated")
 
         elif record_type == 'vital':
             if hasattr(fhir_resource, 'dict'):
-                cache['vitals'] = fhir_resource.dict()
+                cache['vitals'] = fhir_resource.model_dump()
             else:
                 cache['vitals'] = fhir_resource
             logger.info(f"  Vitals updated")
@@ -560,7 +560,7 @@ class ConnectionManager:
                 if 'vitals' in fhir_resource and fhir_resource['vitals']:
                     vitals = fhir_resource['vitals']
                     if hasattr(vitals, 'dict'):
-                        cache['vitals'] = vitals.dict()
+                        cache['vitals'] = vitals.model_dump()
                     else:
                         cache['vitals'] = vitals
                     logger.info(f"  📊 Extracted vitals from compound")
@@ -645,7 +645,7 @@ class ConnectionManager:
 
         await self.broadcast_to_frontend({
             "type": "PATIENT_UPDATE",
-            "data": patient.dict()
+            "data": patient.model_dump()
         })
 
     def set_mode(self, mode: str):
@@ -1349,18 +1349,49 @@ async def chrome_websocket_endpoint(websocket: WebSocket):
     """
     WebSocket endpoint for Chrome extension.
     Receives intercepted AthenaNet API payloads.
+
+    Includes heartbeat mechanism to keep connection alive.
     """
     logger.info(f"Chrome WebSocket connection attempt from {websocket.client}")
     await manager.connect_chrome(websocket)
 
+    # Heartbeat task to keep connection alive
+    async def heartbeat():
+        try:
+            while True:
+                await asyncio.sleep(30)  # Send ping every 30 seconds
+                try:
+                    await websocket.send_json({"type": "PING", "timestamp": datetime.now().isoformat()})
+                    logger.debug("Heartbeat PING sent to Chrome")
+                except Exception:
+                    break  # Connection closed, exit heartbeat
+        except asyncio.CancelledError:
+            pass  # Task cancelled, clean exit
+
+    heartbeat_task = asyncio.create_task(heartbeat())
+
     try:
         while True:
-            # Receive data from Chrome extension
-            data = await websocket.receive_text()
+            # Receive data from Chrome extension with timeout
+            try:
+                data = await asyncio.wait_for(websocket.receive_text(), timeout=120.0)
+            except asyncio.TimeoutError:
+                # No message in 120 seconds - send ping to check if connection is alive
+                try:
+                    await websocket.send_json({"type": "PING", "timestamp": datetime.now().isoformat()})
+                    continue
+                except Exception:
+                    logger.warning("Chrome connection stale - no response to ping")
+                    break
+
             logger.debug(f"Raw data received from Chrome ({len(data)} bytes)")
 
             try:
                 payload = json.loads(data)
+                # Handle PONG responses
+                if payload.get('type') == 'PONG':
+                    logger.debug("Heartbeat PONG received from Chrome")
+                    continue
                 logger.debug("JSON parsed successfully")
                 # Process the AthenaNet payload
                 await manager.process_athena_payload(payload)
@@ -1372,6 +1403,15 @@ async def chrome_websocket_endpoint(websocket: WebSocket):
                 logger.exception("Full traceback:")
 
     except WebSocketDisconnect:
+        pass  # Normal disconnect
+    except Exception as e:
+        logger.error(f"Chrome WebSocket error: {e}")
+    finally:
+        heartbeat_task.cancel()
+        try:
+            await heartbeat_task
+        except asyncio.CancelledError:
+            pass
         manager.disconnect_chrome(websocket)
         # Notify frontend about Chrome disconnection
         await manager.broadcast_to_frontend({
@@ -1385,19 +1425,52 @@ async def frontend_websocket_endpoint(websocket: WebSocket):
     """
     WebSocket endpoint for React frontend.
     Sends processed data and receives mode change commands.
+
+    Includes heartbeat mechanism to keep connection alive through proxies.
     """
     logger.info(f"Frontend WebSocket connection attempt from {websocket.client}")
     await manager.connect_frontend(websocket)
 
+    # Heartbeat task to keep connection alive
+    async def heartbeat():
+        try:
+            while True:
+                await asyncio.sleep(30)  # Send ping every 30 seconds
+                try:
+                    await websocket.send_json({"type": "PING", "timestamp": datetime.now().isoformat()})
+                    logger.debug("Heartbeat PING sent to frontend")
+                except Exception:
+                    break  # Connection closed, exit heartbeat
+        except asyncio.CancelledError:
+            pass  # Task cancelled, clean exit
+
+    heartbeat_task = asyncio.create_task(heartbeat())
+
     try:
         while True:
-            # Receive commands from frontend
-            data = await websocket.receive_text()
+            # Receive commands from frontend with timeout
+            try:
+                # Use wait_for with timeout to detect stale connections
+                data = await asyncio.wait_for(websocket.receive_text(), timeout=120.0)
+            except asyncio.TimeoutError:
+                # No message in 120 seconds - send ping to check if connection is alive
+                try:
+                    await websocket.send_json({"type": "PING", "timestamp": datetime.now().isoformat()})
+                    continue
+                except Exception:
+                    logger.warning("Frontend connection stale - no response to ping")
+                    break
+
             logger.debug(f"Message from frontend: {data}")
 
             try:
                 message = json.loads(data)
                 action = message.get('action', '')
+
+                # Handle PONG responses (heartbeat acknowledgment)
+                if action == 'PONG':
+                    logger.debug("Heartbeat PONG received from frontend")
+                    continue
 
                 logger.info(f"Frontend action received: {action}")
 
@@ -1411,6 +1484,15 @@ async def frontend_websocket_endpoint(websocket: WebSocket):
                 logger.error(f"Error processing frontend message: {e}")
 
     except WebSocketDisconnect:
+        pass  # Normal disconnect
+    except Exception as e:
+        logger.error(f"Frontend WebSocket error: {e}")
+    finally:
+        heartbeat_task.cancel()
+        try:
+            await heartbeat_task
+        except asyncio.CancelledError:
+            pass
         manager.disconnect_frontend(websocket)
 
 
@@ -1429,7 +1511,7 @@ async def get_patient(patient_id: str):
             problems_data=cache.get('problems')
         )
         logger.info(f"Patient found: {patient.name}")
-        return {"patient": patient.dict()}
+        return {"patient": patient.model_dump()}
 
     logger.warning(f"Patient not found: {patient_id}")
     return {"error": "Patient not found", "patient_id": patient_id}
@@ -1449,7 +1531,7 @@ async def list_patients():
             medications_data=cache.get('medications'),
             problems_data=cache.get('problems')
         )
-        patients.append(patient.dict())
+        patients.append(patient.model_dump())
 
     return {"patients": patients, "count": len(patients)}
 

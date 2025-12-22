@@ -705,7 +705,8 @@ def extract_embedded_imaging(raw_data: Dict[str, Any], patient_id: str = None) -
     Extract imaging findings embedded in clinical notes/text.
     Finds references to duplex, ABIs, vein mapping, CTAs etc. in free text.
 
-    If patient_id is provided, also searches raw events file for additional imaging data.
+    Note: Optimized to only use cache data (raw_data) for speed.
+    Raw events file scanning is disabled as it causes 40+ second delays.
     """
     results = []
 
@@ -721,43 +722,15 @@ def extract_embedded_imaging(raw_data: Dict[str, Any], patient_id: str = None) -
         'angiogram': r'(angiogram[^.]{0,100})',
     }
 
-    # Build searchable text more efficiently
+    # Build searchable text from cache data only (fast path)
     text_parts = []
 
-    # Add raw_data
+    # Add raw_data from cache
     if raw_data:
-        text_parts.append(json.dumps(raw_data))
-
-    # Load and search raw events if patient_id provided
-    # Only load relevant payloads to avoid memory issues
-    if patient_id:
-        import os
-        jsonl_path = os.path.join("data", "raw_events.jsonl")
-        if os.path.exists(jsonl_path):
-            event_count = 0
-            max_events = 50  # Limit to prevent slowdown
-            try:
-                with open(jsonl_path, "r") as f:
-                    for line in f:
-                        if event_count >= max_events:
-                            break
-                        # Quick pre-check before parsing JSON
-                        if patient_id not in line:
-                            continue
-                        try:
-                            event = json.loads(line.strip())
-                            if str(event.get("patient_id", "")) == str(patient_id):
-                                event_count += 1
-                                payload = event.get("payload")
-                                if payload and isinstance(payload, dict):
-                                    # Only stringify relevant fields containing clinical data
-                                    for key in ['historical_clinical_encounters', 'notes', 'raw', 'surgical', 'summary', 'diagnoses', 'assessment_plan']:
-                                        if key in payload:
-                                            text_parts.append(json.dumps(payload[key]))
-                        except:
-                            continue
-            except Exception as e:
-                logger.error(f"[IMAGING] Error reading raw events: {e}")
+        # Only stringify relevant sections to reduce memory/CPU
+        for key in ['unknown', 'notes', 'documents', 'procedures']:
+            if key in raw_data and raw_data[key]:
+                text_parts.append(json.dumps(raw_data[key]))
 
     # Join and lowercase for searching
     raw_str = ' '.join(text_parts).replace('\\n', ' ').replace('\\r', ' ')

@@ -653,7 +653,7 @@ def convert_to_fhir(endpoint: str, method: str, payload: Any) -> Tuple[str, Any]
             meds_data = _extract_nested_data(payload, ['medications', 'activeMedications', 'active_medications'])
         if meds_data:
             converted_meds = convert_medications(meds_data)
-            result['medications'] = [m.dict() for m in converted_meds]
+            result['medications'] = [m.model_dump() for m in converted_meds]
             logger.info(f"[FHIR] Extracted {len(result['medications'])} medications from compound")
 
         # Extract problems/conditions - check both raw and top level
@@ -662,7 +662,7 @@ def convert_to_fhir(endpoint: str, method: str, payload: Any) -> Tuple[str, Any]
             probs_data = _extract_nested_data(payload, ['problems', 'activeProblems', 'active_problems', 'conditions'])
         if probs_data:
             converted_probs = convert_problems(probs_data)
-            result['conditions'] = [c.dict() for c in converted_probs]
+            result['conditions'] = [c.model_dump() for c in converted_probs]
             logger.info(f"[FHIR] Extracted {len(result['conditions'])} conditions from compound")
 
         # Extract vitals - check both raw and top level
@@ -735,9 +735,9 @@ def convert_to_fhir(endpoint: str, method: str, payload: Any) -> Tuple[str, Any]
     if record_type == 'vital':
         return record_type, convert_vitals(payload)
     elif record_type == 'medication':
-        return record_type, {"medications": [m.dict() for m in convert_medications(payload)]}
+        return record_type, {"medications": [m.model_dump() for m in convert_medications(payload)]}
     elif record_type == 'problem':
-        return record_type, {"conditions": [c.dict() for c in convert_problems(payload)]}
+        return record_type, {"conditions": [c.model_dump() for c in convert_problems(payload)]}
     elif record_type == 'patient':
         patient_id = extract_patient_id(endpoint)
         return record_type, convert_patient(payload, patient_id)

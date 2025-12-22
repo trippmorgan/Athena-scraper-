@@ -3,7 +3,9 @@ import { LogEntry, Patient, ScraperStatus } from '../types';
 type WebSocketMessage =
   | { type: 'LOG_ENTRY'; data: LogEntry }
   | { type: 'PATIENT_UPDATE'; data: Patient }
-  | { type: 'STATUS_UPDATE'; data: string };
+  | { type: 'STATUS_UPDATE'; data: string }
+  | { type: 'PING'; timestamp: string }
+  | { type: 'CLINICAL_UPDATE'; data: any };
 
 // Frontend Logger with styled console output
 const Logger = {
@@ -125,6 +127,19 @@ class WebSocketService {
             } else {
               this.onStatusChange?.(ScraperStatus.INTERCEPTING);
             }
+            break;
+
+          case 'PING':
+            // Respond to heartbeat with PONG to keep connection alive
+            Logger.debug('Heartbeat PING received, sending PONG');
+            if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+              this.socket.send(JSON.stringify({ action: 'PONG', timestamp: new Date().toISOString() }));
+            }
+            break;
+
+          case 'CLINICAL_UPDATE':
+            // Clinical data from interpreters - forward to patient update handler
+            Logger.debug('Clinical update received:', message.data);
             break;
 
           default:

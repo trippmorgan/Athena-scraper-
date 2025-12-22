@@ -257,6 +257,7 @@ OUTPUT:
         """
         # Extract demographics - check both 'patient' field and 'unknown' array
         patient_data = raw_cache.get("patient") or {}
+        logger.info(f"[NARRATIVE] Patient data keys: {list(patient_data.keys()) if patient_data else 'EMPTY'}")
 
         # If patient is empty, search in unknown array (same as _transform_cache_to_parser_input)
         if not patient_data:
@@ -278,21 +279,48 @@ OUTPUT:
                 gender = "female"
             elif gender == "m":
                 gender = "male"
+            logger.info(f"[NARRATIVE] Athena format - DOB obj: {dob_obj}, DOB: {dob}, Gender: {gender}")
         else:
-            # FHIR format
-            dob = patient_data.get("birthDate") or patient_data.get("dob")
-            gender = patient_data.get("gender", "unknown")
+            # FHIR format - also try common Athena field names
+            dob = (patient_data.get("birthDate") or patient_data.get("dob") or
+                   patient_data.get("DOB") or patient_data.get("dateOfBirth") or
+                   patient_data.get("DateOfBirth"))
+            gender = (patient_data.get("gender") or patient_data.get("Gender") or
+                     patient_data.get("sex") or patient_data.get("Sex") or "unknown")
+            logger.info(f"[NARRATIVE] FHIR format - DOB: {dob}, Gender: {gender}")
 
-        # Calculate age
+        # Calculate age - handle multiple date formats
         age = "Unknown age"
         dob_str = None
         if dob:
-            try:
-                bday = datetime.strptime(str(dob), "%Y-%m-%d")
-                age = f"{(datetime.now() - bday).days // 365} years old"
-                dob_str = bday.strftime("%m/%d/%Y")
-            except Exception:
-                dob_str = str(dob)
+            dob_parsed = None
+            dob_raw = str(dob).strip()
+
+            # Try multiple date formats
+            date_formats = [
+                "%Y-%m-%d",       # 1960-10-10 (ISO)
+                "%m/%d/%Y",       # 10/10/1960 (US)
+                "%m-%d-%Y",       # 10-10-1960
+                "%Y/%m/%d",       # 1960/10/10
+                "%d/%m/%Y",       # 10/10/1960 (EU)
+                "%Y%m%d",         # 19601010 (compact)
+            ]
+
+            for fmt in date_formats:
+                try:
+                    dob_parsed = datetime.strptime(dob_raw, fmt)
+                    break
+                except ValueError:
+                    continue
+
+            if dob_parsed:
+                years = (datetime.now() - dob_parsed).days // 365
+                age = f"{years} years old"
+                dob_str = dob_parsed.strftime("%m/%d/%Y")
+            else:
+                # Couldn't parse, use raw string
+                dob_str = dob_raw
+                logger.warning(f"[NARRATIVE] Could not parse DOB: {dob_raw}")
 
         # Format diagnoses WITH ICD-10 codes - separate into categories
         vascular_keywords = ["atherosclerosis", "arterial", "venous", "vascular", "aneurysm",
@@ -338,12 +366,6 @@ OUTPUT:
         allergies = [f"{a.allergen}: {a.surgical_implication or 'caution'}"
                      for a in profile.critical_allergies]
 
-        # Format all diagnoses as a comprehensive list
-        all_dx_formatted = []
-        for dx in profile.diagnoses:
-            if dx.status == "active":
-                all_dx_formatted.append(format_dx_with_icd(dx))
-
         context = f"""
 PATIENT: {profile.name}
 MRN: {profile.mrn}
@@ -359,9 +381,6 @@ CARDIOVASCULAR RISK FACTORS/COMORBIDITIES:
 
 OTHER ACTIVE DIAGNOSES:
 {chr(10).join(f"- {d}" for d in other_dx) if other_dx else "None"}
-
-ALL DIAGNOSES WITH ICD-10 CODES:
-{chr(10).join(f"- {d}" for d in all_dx_formatted) if all_dx_formatted else "None"}
 
 ACTIVE ANTITHROMBOTICS:
 {", ".join(meds) if meds else "None documented"}
