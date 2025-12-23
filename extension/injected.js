@@ -35,6 +35,7 @@
     xhrIntercepted: 0,
     fetchIgnored: 0,
     xhrIgnored: 0,
+    writesCaptured: 0,  // POST/PUT operations (saves)
     errors: 0
   };
 
@@ -145,17 +146,134 @@
       return true;
     }
 
+    // DOCUMENT & IMAGING CAPTURE - PDFs, CTA, MRI, Ultrasound, Surgical Notes, Pathology
+    if (urlLower.includes('/document') ||
+        urlLower.includes('/pdf') ||
+        urlLower.includes('/report') ||
+        urlLower.includes('/imaging') ||
+        urlLower.includes('/radiology') ||
+        urlLower.includes('/clinicaldocument') ||
+        urlLower.includes('/operativenote') ||
+        urlLower.includes('/procedurenote') ||
+        urlLower.includes('/pathology') ||
+        urlLower.includes('/labresult') ||
+        urlLower.includes('/surgicalnote') ||
+        urlLower.includes('sources=clinical_documents') ||
+        urlLower.includes('sources=adminorders') ||
+        urlLower.includes('sources=imaging_orders') ||
+        urlLower.includes('sources=imaging_results') ||
+        urlLower.includes('sources=lab_results') ||
+        urlLower.includes('sources=procedure_notes') ||
+        urlLower.includes('sources=operative_reports') ||
+        urlLower.includes('sources=surgical_history') ||
+        urlLower.includes('sources=documents') ||
+        urlLower.includes('sources=chart_documents') ||
+        urlLower.includes('sources=scanned_documents') ||
+        urlLower.includes('sources=external_clinical_documents') ||
+        urlLower.includes('documentid=') ||
+        urlLower.includes('/clinicalresult') ||
+        urlLower.includes('/testresult') ||
+        urlLower.includes('/viewdocument') ||
+        urlLower.includes('/getdocument')) {
+      return true;
+    }
+
     return false;
   }
 
+  // Helper to classify document type
+  function classifyDocumentType(url, data) {
+    const urlLower = (url || '').toLowerCase();
+    const dataStr = JSON.stringify(data || {}).toLowerCase();
+
+    if (urlLower.includes('cta') || dataStr.includes('ct angiography') || dataStr.includes('cta ')) {
+      return 'cta';
+    }
+    if (urlLower.includes('mri') || urlLower.includes('mra') || dataStr.includes('magnetic resonance')) {
+      return 'mri';
+    }
+    if (urlLower.includes('ultrasound') || urlLower.includes('duplex') || dataStr.includes('duplex') || dataStr.includes('ultrasound')) {
+      return 'ultrasound';
+    }
+    if (urlLower.includes('operative') || urlLower.includes('surgical') || dataStr.includes('operative note') || dataStr.includes('surgical note')) {
+      return 'surgical';
+    }
+    if (urlLower.includes('pathology') || dataStr.includes('pathology') || dataStr.includes('biopsy')) {
+      return 'pathology';
+    }
+    if (urlLower.includes('echo') || dataStr.includes('echocardiogram') || dataStr.includes('echo ')) {
+      return 'echo';
+    }
+    if (urlLower.includes('xray') || urlLower.includes('x-ray') || dataStr.includes('x-ray') || dataStr.includes('radiograph')) {
+      return 'xray';
+    }
+    if (urlLower.includes('lab') || dataStr.includes('laboratory')) {
+      return 'lab_report';
+    }
+    if (urlLower.includes('.pdf') || dataStr.includes('application/pdf')) {
+      return 'pdf';
+    }
+    return 'other';
+  }
+
+  // Check if this is a WRITE operation (save note, update chart, etc.)
+  function isWriteOperation(url, method) {
+    if (method !== 'POST' && method !== 'PUT' && method !== 'PATCH') return false;
+    const urlLower = url.toLowerCase();
+
+    // Athena write patterns - note saves, chart updates, orders, etc.
+    return (
+      urlLower.includes('/note') ||
+      urlLower.includes('/document') ||
+      urlLower.includes('/save') ||
+      urlLower.includes('/update') ||
+      urlLower.includes('/submit') ||
+      urlLower.includes('/sign') ||
+      urlLower.includes('/order') ||
+      urlLower.includes('/charge') ||
+      urlLower.includes('/claim') ||
+      urlLower.includes('/encounter') ||
+      urlLower.includes('/clinicalnote') ||
+      urlLower.includes('/diagnosis') ||
+      urlLower.includes('/procedure') ||
+      urlLower.includes('/ax/chart') ||
+      urlLower.includes('/ax/encounter') ||
+      urlLower.includes('/ax/note') ||
+      urlLower.includes('action=save') ||
+      urlLower.includes('action=submit')
+    );
+  }
+
   // Helper to emit intercept event
-  function emitIntercept(type, url, method, data) {
-    InjectedLogger.intercept(`${type} CAPTURED`, {
-      method: method,
-      url: url.length > 70 ? url.substring(0, 70) + '...' : url,
-      dataType: typeof data,
-      dataSize: data ? JSON.stringify(data).length : 0
-    });
+  function emitIntercept(type, url, method, data, requestBody = null) {
+    const isWrite = isWriteOperation(url, method);
+    const documentType = classifyDocumentType(url, data);
+    const isDocument = documentType !== 'other' ||
+                       (url && url.toLowerCase().includes('document')) ||
+                       (url && url.toLowerCase().includes('/report'));
+
+    if (isWrite) {
+      stats.writesCaptured++;
+      InjectedLogger._log('warn', '📝', `WRITE OPERATION CAPTURED: ${method}`, {
+        url: url.length > 70 ? url.substring(0, 70) + '...' : url,
+        requestBodySize: requestBody ? JSON.stringify(requestBody).length : 0,
+        responseSize: data ? JSON.stringify(data).length : 0
+      });
+    } else if (isDocument) {
+      InjectedLogger._log('info', '📄', `DOCUMENT CAPTURED: ${documentType.toUpperCase()}`, {
+        method: method,
+        url: url.length > 70 ? url.substring(0, 70) + '...' : url,
+        documentType: documentType,
+        dataSize: data ? JSON.stringify(data).length : 0
+      });
+    } else {
+      InjectedLogger.intercept(`${type} CAPTURED`, {
+        method: method,
+        url: url.length > 70 ? url.substring(0, 70) + '...' : url,
+        dataType: typeof data,
+        dataSize: data ? JSON.stringify(data).length : 0
+      });
+    }
 
     window.dispatchEvent(new CustomEvent('SHADOW_EHR_INTERCEPT', {
       detail: {
@@ -163,6 +281,10 @@
         url: url,
         method: method,
         payload: data,
+        requestBody: requestBody,  // Include the request body for write operations
+        isWriteOperation: isWrite,
+        isDocument: isDocument,
+        documentType: documentType,
         timestamp: new Date().toISOString()
       }
     }));
@@ -284,18 +406,21 @@
   // --- 3. Ready message ---
   InjectedLogger.info('═'.repeat(50));
   InjectedLogger.success('INTERCEPTOR ACTIVE AND READY');
-  InjectedLogger.info('Monitoring standard: /chart/*, /api/*, /patient*, /clinical*, /medication*, /lab*, /vital*');
-  InjectedLogger.info('Monitoring Athena:  /ax/data, sources=active_medications, sources=allergies, etc.');
+  InjectedLogger.info('📖 READ Monitoring: /chart/*, /api/*, /patient*, /medication*, /lab*, /vital*');
+  InjectedLogger.info('📖 READ Athena:     /ax/data, sources=active_medications, allergies, etc.');
+  InjectedLogger.info('📄 DOCS Monitoring: /document, /report, /imaging, sources=imaging_results, etc.');
+  InjectedLogger.info('📝 WRITE Monitoring: /note, /save, /submit, /sign, /order, /charge, /claim');
   InjectedLogger.info('═'.repeat(50));
 
   // --- 4. Periodic stats logging ---
   setInterval(() => {
     const total = stats.fetchIntercepted + stats.xhrIntercepted;
-    if (total > 0) {
+    if (total > 0 || stats.writesCaptured > 0) {
       InjectedLogger.info('INTERCEPT STATS', {
         fetchCaptured: stats.fetchIntercepted,
         xhrCaptured: stats.xhrIntercepted,
         totalCaptured: total,
+        writeOperations: stats.writesCaptured,
         ignored: stats.fetchIgnored + stats.xhrIgnored,
         errors: stats.errors
       });
@@ -306,6 +431,12 @@
   window.__shadowEhrStats = () => {
     console.table(stats);
     return stats;
+  };
+
+  // Expose function to get captured writes
+  window.__shadowEhrWrites = () => {
+    console.log(`📝 Total write operations captured: ${stats.writesCaptured}`);
+    return stats.writesCaptured;
   };
 
 })();

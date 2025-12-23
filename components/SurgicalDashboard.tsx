@@ -34,6 +34,25 @@ interface Document {
   url?: string;
 }
 
+interface ClinicalDocument {
+  id: string;
+  title: string;
+  type: 'cta' | 'mri' | 'ultrasound' | 'surgical' | 'pathology' | 'echo' | 'xray' | 'lab_report' | 'pdf' | 'other';
+  date: string;
+  provider?: string;
+  url?: string;
+  summary?: string;
+  findings?: string;
+}
+
+interface BillingCode {
+  code: string;
+  type: 'icd10' | 'cpt' | 'hcpcs';
+  description: string;
+  linkedDiagnosis?: string;
+  status: 'suggested' | 'confirmed' | 'billed';
+}
+
 interface VascularProfile {
   patient_id: string;
   mrn: string;
@@ -107,14 +126,74 @@ export const SurgicalDashboard: React.FC<SurgicalDashboardProps> = ({ onSearch }
   const [error, setError] = useState<string | null>(null);
   const [clearCacheStatus, setClearCacheStatus] = useState<string | null>(null);
 
+  // Notes tab state
+  const [selectedDocType, setSelectedDocType] = useState<string>('all');
+  const [documents, setDocuments] = useState<ClinicalDocument[]>([]);
+  const [documentsLoading, setDocumentsLoading] = useState(false);
+
+  // Billing tab state
+  const [selectedBillingFilter, setSelectedBillingFilter] = useState<string>('all');
+  const [billingCodes, setBillingCodes] = useState<BillingCode[]>([]);
+  const [billingLoading, setBillingLoading] = useState(false);
+
   useEffect(() => {
     console.log('[SurgicalDashboard] Profile state updated:', profile);
     if (profile) {
       console.log('[SurgicalDashboard] Rendering RawDataViewer with patientId:', profile.patient_id ?? mrn);
+      // Fetch documents and billing when profile loads
+      fetchDocuments(profile.patient_id ?? mrn);
+      fetchBillingCodes(profile.patient_id ?? mrn);
     } else {
       console.log('[SurgicalDashboard] Profile is null, RawDataViewer will not be rendered.');
     }
   }, [profile, mrn]);
+
+  const fetchDocuments = async (patientId: string) => {
+    setDocumentsLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/active/documents/${patientId}`);
+      if (res.ok) {
+        const data = await res.json();
+        const docs: ClinicalDocument[] = data.documents.map((d: any) => ({
+          id: d.id,
+          title: d.title,
+          type: d.type as ClinicalDocument['type'],
+          date: d.date,
+          provider: d.provider,
+          url: d.url,
+          summary: d.summary,
+          findings: d.raw?.findings || d.raw?.impression || ''
+        }));
+        setDocuments(docs);
+      }
+    } catch (e) {
+      console.error('Failed to fetch documents:', e);
+    } finally {
+      setDocumentsLoading(false);
+    }
+  };
+
+  const fetchBillingCodes = async (patientId: string) => {
+    setBillingLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/active/billing/${patientId}`);
+      if (res.ok) {
+        const data = await res.json();
+        const codes: BillingCode[] = data.billing_codes.map((c: any) => ({
+          code: c.code,
+          type: 'icd10' as const,
+          description: c.description,
+          linkedDiagnosis: c.linked_diagnosis,
+          status: c.status as BillingCode['status']
+        }));
+        setBillingCodes(codes);
+      }
+    } catch (e) {
+      console.error('Failed to fetch billing codes:', e);
+    } finally {
+      setBillingLoading(false);
+    }
+  };
 
   const fetchProfile = async (patientId: string): Promise<VascularProfile | null> => {
     try {
