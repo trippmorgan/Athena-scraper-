@@ -1,0 +1,205 @@
+diff --git a/backend/active_routes.py b/backend/active_routes.py
+index 64c662c..e21ed28 100644
+--- a/backend/active_routes.py
++++ b/backend/active_routes.py
+@@ -473,4 +473,197 @@ async def search_patient_data(patient_id: str, q: str = ""):
+     search_in_list(cache.get("unknown", []), "unknown")
+ 
+     results["total_categories_matched"] = len(results["matches"])
+-    return results
+\ No newline at end of file
++    return results
++
++
++# ============================================================
++# DOCUMENT ROUTES - Clinical Documents, PDFs, Reports
++# ============================================================
++
++def classify_document_type(doc: Dict) -> str:
++    """
++    Classify a document into a category based on its content.
++    Returns: cta, mri, ultrasound, surgical, pathology, echo, xray, lab_report, pdf, other
++    """
++    # Combine all text fields for searching
++    text = ""
++    for key in ["title", "name", "description", "type", "category", "documentType", "study_type"]:
++        if key in doc and doc[key]:
++            text += f" {doc[key]}"
++    text = text.lower()
++
++    # Check for document type patterns
++    if any(kw in text for kw in ["ct angio", "cta", "computed tomography angio"]):
++        return "cta"
++    if any(kw in text for kw in ["mri", "mra", "magnetic resonance"]):
++        return "mri"
++    if any(kw in text for kw in ["ultrasound", "duplex", "doppler", "sonograph"]):
++        return "ultrasound"
++    if any(kw in text for kw in ["operative", "surgical", "surgery note", "procedure note", "op note"]):
++        return "surgical"
++    if any(kw in text for kw in ["pathology", "biopsy", "histology", "cytology"]):
++        return "pathology"
++    if any(kw in text for kw in ["echo", "echocardiogram", "tte", "tee"]):
++        return "echo"
++    if any(kw in text for kw in ["x-ray", "xray", "radiograph", "chest film"]):
++        return "xray"
++    if any(kw in text for kw in ["lab", "laboratory", "chemistry", "hematology"]):
++        return "lab_report"
++    if any(kw in text for kw in ["pdf", ".pdf"]):
++        return "pdf"
++
++    return "other"
++
++
++@router.get("/documents/{patient_id}")
++async def get_patient_documents(patient_id: str, doc_type: str = None):
++    """
++    Get all clinical documents for a patient.
++    Optionally filter by document type (cta, mri, ultrasound, surgical, pathology, echo, xray, lab_report, pdf, other)
++    """
++    if patient_id not in main_patient_cache:
++        raise HTTPException(status_code=404, detail="Patient not found in cache")
++
++    cache = main_patient_cache[patient_id]
++    documents = cache.get("documents", [])
++    imaging = cache.get("imaging", [])
++    notes = cache.get("notes", [])
++
++    # Combine all document sources
++    all_docs = []
++    doc_id = 0
++
++    # Process documents
++    for doc in documents:
++        doc_id += 1
++        doc_type_classified = classify_document_type(doc)
++        all_docs.append({
++            "id": f"doc-{doc_id}",
++            "title": doc.get("title") or doc.get("name") or doc.get("documentType") or "Unknown Document",
++            "type": doc_type_classified,
++            "date": doc.get("date") or doc.get("createdDate") or doc.get("documentDate") or "",
++            "provider": doc.get("provider") or doc.get("author") or doc.get("createdBy") or "",
++            "summary": doc.get("summary") or doc.get("description") or "",
++            "url": doc.get("url") or doc.get("documentUrl") or "",
++            "raw": doc
++        })
++
++    # Process imaging as documents
++    for img in imaging:
++        doc_id += 1
++        doc_type_classified = classify_document_type(img)
++        all_docs.append({
++            "id": f"img-{doc_id}",
++            "title": img.get("study_type") or img.get("title") or img.get("name") or "Imaging Study",
++            "type": doc_type_classified,
++            "date": img.get("date") or img.get("study_date") or "",
++            "provider": img.get("provider") or img.get("radiologist") or "",
++            "summary": img.get("impression") or img.get("findings") or img.get("summary") or "",
++            "url": img.get("url") or img.get("report_url") or "",
++            "raw": img
++        })
++
++    # Process notes as documents
++    for note in notes:
++        doc_id += 1
++        doc_type_classified = classify_document_type(note)
++        if doc_type_classified == "other":
++            doc_type_classified = "pdf"  # Default notes to PDF type
++        all_docs.append({
++            "id": f"note-{doc_id}",
++            "title": note.get("title") or note.get("noteType") or note.get("type") or "Clinical Note",
++            "type": doc_type_classified,
++            "date": note.get("date") or note.get("noteDate") or note.get("createdDate") or "",
++            "provider": note.get("author") or note.get("provider") or note.get("createdBy") or "",
++            "summary": note.get("content") or note.get("text") or note.get("summary") or "",
++            "url": note.get("url") or "",
++            "raw": note
++        })
++
++    # Filter by type if specified
++    if doc_type:
++        all_docs = [d for d in all_docs if d["type"] == doc_type]
++
++    # Sort by date (most recent first)
++    all_docs.sort(key=lambda x: x.get("date", ""), reverse=True)
++
++    # Count by type
++    type_counts = {}
++    for doc in all_docs:
++        t = doc["type"]
++        type_counts[t] = type_counts.get(t, 0) + 1
++
++    return {
++        "patient_id": patient_id,
++        "documents": all_docs,
++        "total": len(all_docs),
++        "by_type": type_counts
++    }
++
++
++@router.get("/billing/{patient_id}")
++async def get_billing_codes(patient_id: str):
++    """
++    Get ICD-10 billing codes derived from patient diagnoses.
++    Links diagnoses to their billing codes.
++    """
++    if patient_id not in main_patient_cache:
++        raise HTTPException(status_code=404, detail="Patient not found in cache")
++
++    cache = main_patient_cache[patient_id]
++    problems = cache.get("problems", [])
++
++    billing_codes = []
++    for prob in problems:
++        # Extract ICD-10 code from various possible field names
++        icd10 = (
++            prob.get("icd10_code") or
++            prob.get("icd10Code") or
++            prob.get("code") or
++            prob.get("diagnosisCode") or
++            ""
++        )
++
++        # Get SNOMED code if available
++        snomed = (
++            prob.get("snomed_code") or
++            prob.get("snomedCode") or
++            prob.get("snomedCt") or
++            ""
++        )
++
++        # Get diagnosis name
++        name = (
++            prob.get("name") or
++            prob.get("display_name") or
++            prob.get("description") or
++            prob.get("diagnosis") or
++            "Unknown"
++        )
++
++        billing_codes.append({
++            "code": icd10 if icd10 else "Pending",
++            "type": "icd10",
++            "description": name,
++            "snomed_code": snomed,
++            "linked_diagnosis": name,
++            "status": "suggested" if icd10 else "pending",
++            "onset_date": prob.get("onset_date") or prob.get("onsetDate") or "",
++            "raw": prob
++        })
++
++    # Count by status
++    confirmed_count = len([c for c in billing_codes if c["status"] == "confirmed"])
++    suggested_count = len([c for c in billing_codes if c["status"] == "suggested"])
++    pending_count = len([c for c in billing_codes if c["status"] == "pending"])
++
++    return {
++        "patient_id": patient_id,
++        "billing_codes": billing_codes,
++        "total": len(billing_codes),
++        "summary": {
++            "confirmed": confirmed_count,
++            "suggested": suggested_count,
++            "pending": pending_count
++        }
++    }
+\ No newline at end of file
