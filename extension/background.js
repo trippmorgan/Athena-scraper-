@@ -1,22 +1,101 @@
-// background.js - Service worker with Active Fetch support
-// Handles both passive interception relay AND active fetch commands
+/**
+ * =============================================================================
+ * BACKGROUND.JS - The Data Relay Service Worker
+ * =============================================================================
+ *
+ * ARCHITECTURAL ROLE:
+ * This is the third component in the data flow pipeline. It runs as a
+ * Chrome extension service worker (Manifest V3) and is responsible for
+ * reliably transmitting captured data to the Python backend.
+ *
+ * DATA FLOW POSITION: [3/7]
+ *   interceptor.js -> injector.js -> [background.js] -> main.py ->
+ *   fhir_converter.py -> WebSocket -> SurgicalDashboard.tsx
+ *
+ * CRITICAL RESPONSIBILITIES:
+ *
+ * 1. DATA RELAY (Primary)
+ *    Receives API_CAPTURE messages from content scripts and forwards
+ *    to backend via HTTP POST /ingest. This is the MOST IMPORTANT function.
+ *
+ * 2. CONNECTION MANAGEMENT
+ *    Maintains connection status with backend via health checks.
+ *    Updates badge to show ON/OFF/ERR status.
+ *
+ * 3. OFFLINE QUEUE
+ *    If backend is unavailable, queues messages for later delivery.
+ *    Prevents data loss during backend restarts.
+ *
+ * 4. ACTIVE FETCH COORDINATION
+ *    Routes active fetch commands from popup/frontend to content scripts.
+ *    Manages callbacks for async active fetch results.
+ *
+ * 5. TAB TRACKING
+ *    Tracks which tabs have active Athena sessions for targeting
+ *    active fetch commands to the correct tab.
+ *
+ * SERVICE WORKER LIFECYCLE:
+ * In Manifest V3, background scripts are service workers that can be
+ * terminated after inactivity. State must be recoverable, and we use
+ * the health check interval to keep the worker alive during active use.
+ *
+ * DESIGN PRINCIPLE:
+ * The data relay function MUST be non-blocking and always first.
+ * Any AI processing or enhancement happens AFTER successful relay.
+ * The system MUST work even if AI features fail.
+ *
+ * =============================================================================
+ */
 
 const LOCAL_SERVICE_URL = 'http://localhost:8000';
 
-// State tracking
-let connectionStatus = 'disconnected';
-let captureCount = 0;
-let activeFetchCount = 0;
-let lastError = null;
-let bytesSent = 0;
+// =============================================================================
+// STATE MANAGEMENT
+// =============================================================================
+/**
+ * Connection and statistics state.
+ * These values are lost if service worker restarts, but are non-critical.
+ */
+let connectionStatus = 'disconnected';  // 'connected' | 'disconnected' | 'error'
+let captureCount = 0;                   // Total passive captures
+let activeFetchCount = 0;               // Total active fetch commands
+let lastError = null;                   // Most recent error message
+let bytesSent = 0;                      // Total bytes sent to backend
 
-// Queue for offline buffering
+/**
+ * OFFLINE QUEUE
+ * -------------
+ * If backend is unavailable, captured data is queued here.
+ * When backend comes online, queue is processed.
+ * Limited to MAX_QUEUE_SIZE to prevent memory issues.
+ */
 let pendingQueue = [];
 const MAX_QUEUE_SIZE = 100;
 
-// Track tabs with active Athena sessions
+/**
+ * ATHENA TAB TRACKING
+ * -------------------
+ * Maps tab IDs to Athena session info.
+ * Used to route active fetch commands to correct tab.
+ */
 const athenaTabs = new Map();
 
+/**
+ * ACTIVE FETCH CALLBACKS
+ * ----------------------
+ * Maps callback IDs to Promise resolvers.
+ * Active fetch is async: we send command, then wait for result message.
+ */
+const activeFetchCallbacks = new Map();
+
+// =============================================================================
+// LOGGING UTILITY
+// =============================================================================
+/**
+ * Styled console output for service worker.
+ * Note: Service worker console is separate from page console.
+ * View in: chrome://extensions -> service worker "Inspect"
+ */
 const Logger = {
   _log: (level, emoji, msg, data) => {
     const time = new Date().toLocaleTimeString('en-US', { hour12: false });
@@ -48,27 +127,67 @@ Logger.info('Background service worker starting...');
 Logger.info('Target service:', LOCAL_SERVICE_URL);
 Logger.separator();
 
-// Update badge based on status
+// =============================================================================
+// BADGE MANAGEMENT
+// =============================================================================
+/**
+ * updateBadge(mode)
+ * -----------------
+ * Updates the extension toolbar badge to show current status.
+ *
+ * Badge States:
+ * - "ON" (green): Connected to backend, passive mode
+ * - "ACT" (orange): Connected, active fetch in progress
+ * - "ERR" (red): Connection error
+ * - "OFF" (gray): Disconnected from backend
+ *
+ * @param {string} mode - 'passive' or 'active'
+ */
 function updateBadge(mode = 'passive') {
   if (chrome.action) {
     if (connectionStatus === 'connected') {
       if (mode === 'active') {
         chrome.action.setBadgeText({ text: 'ACT' });
-        chrome.action.setBadgeBackgroundColor({ color: '#f97316' }); // Orange for active
+        chrome.action.setBadgeBackgroundColor({ color: '#f97316' }); // Orange
       } else {
         chrome.action.setBadgeText({ text: 'ON' });
-        chrome.action.setBadgeBackgroundColor({ color: '#10b981' });
+        chrome.action.setBadgeBackgroundColor({ color: '#10b981' }); // Green
       }
     } else if (connectionStatus === 'error') {
       chrome.action.setBadgeText({ text: 'ERR' });
-      chrome.action.setBadgeBackgroundColor({ color: '#ef4444' });
+      chrome.action.setBadgeBackgroundColor({ color: '#ef4444' }); // Red
     } else {
       chrome.action.setBadgeText({ text: 'OFF' });
-      chrome.action.setBadgeBackgroundColor({ color: '#6b7280' });
+      chrome.action.setBadgeBackgroundColor({ color: '#6b7280' }); // Gray
     }
   }
 }
 
+// =============================================================================
+// CORE DATA RELAY
+// =============================================================================
+/**
+ * sendToLocalService(payload)
+ * ---------------------------
+ * THE MOST CRITICAL FUNCTION IN THIS FILE.
+ *
+ * Sends captured data to the Python backend via HTTP POST.
+ * This is the primary data pipeline - it MUST be reliable.
+ *
+ * Features:
+ * 1. Sends payload to /ingest endpoint
+ * 2. Updates connection status based on response
+ * 3. Processes offline queue when connection restored
+ * 4. Queues failed requests for retry
+ *
+ * Error Handling:
+ * - Network errors: Queue payload, mark status as error
+ * - HTTP errors: Log and continue
+ * - Never throw - relay must not break
+ *
+ * @param {object} payload - Captured API data to send
+ * @returns {Promise<boolean>} - True if sent successfully
+ */
 async function sendToLocalService(payload) {
   const payloadJson = JSON.stringify(payload);
   const payloadSize = new TextEncoder().encode(payloadJson).length;
@@ -85,7 +204,7 @@ async function sendToLocalService(payload) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Source': 'athena-bridge'
+        'X-Source': 'athena-bridge'  // Identifies traffic source in backend
       },
       body: payloadJson
     });
@@ -97,11 +216,12 @@ async function sendToLocalService(payload) {
       bytesSent += payloadSize;
       lastError = null;
 
+      // Update badge if status changed
       if (oldStatus !== 'connected') {
         updateBadge();
       }
 
-      // Process queued items
+      // QUEUE DRAIN: Process any queued items now that we're connected
       while (pendingQueue.length > 0) {
         const queued = pendingQueue.shift();
         try {
@@ -111,6 +231,7 @@ async function sendToLocalService(payload) {
             body: JSON.stringify(queued)
           });
         } catch (e) {
+          // If queue drain fails, put item back and stop
           pendingQueue.unshift(queued);
           break;
         }
@@ -125,18 +246,45 @@ async function sendToLocalService(payload) {
     lastError = error.message;
     updateBadge();
 
+    // QUEUE FOR RETRY: Don't lose data if backend is down
     if (pendingQueue.length < MAX_QUEUE_SIZE) {
       pendingQueue.push(payload);
+      Logger.warn(`Queued for retry (queue size: ${pendingQueue.length})`);
+    } else {
+      Logger.error('Queue full, dropping payload');
     }
 
     return false;
   }
 }
 
-// ============================================================
-// ACTIVE FETCH - Send commands to content script
-// ============================================================
-
+// =============================================================================
+// ACTIVE FETCH SYSTEM
+// =============================================================================
+/**
+ * sendActiveFetchCommand(tabId, action, payload)
+ * -----------------------------------------------
+ * Sends an active fetch command to a specific Athena tab.
+ *
+ * Active Fetch vs Passive Capture:
+ * - Passive: We observe requests Athena makes on its own
+ * - Active: We initiate requests for specific data (e.g., by MRN)
+ *
+ * How It Works:
+ * 1. Generate unique callback ID
+ * 2. Store Promise resolver in activeFetchCallbacks map
+ * 3. Send command to content script via chrome.tabs.sendMessage
+ * 4. Content script forwards to activeFetcher.js in page context
+ * 5. activeFetcher.js makes request and posts result back
+ * 6. Result message triggers callback resolution
+ *
+ * Timeout: 30 seconds (EHR systems can be slow)
+ *
+ * @param {number} tabId - Chrome tab ID with Athena session
+ * @param {string} action - Fetch action (FETCH_PREOP, etc.)
+ * @param {object} payload - Action parameters (MRN, etc.)
+ * @returns {Promise} - Resolves with fetch result
+ */
 async function sendActiveFetchCommand(tabId, action, payload) {
   Logger.active('ACTIVE FETCH COMMAND', { tabId, action, payload });
   activeFetchCount++;
@@ -147,7 +295,7 @@ async function sendActiveFetchCommand(tabId, action, payload) {
       reject(new Error('Active fetch timeout'));
     }, 30000); // 30 second timeout
 
-    // Store callback for response
+    // Generate unique callback ID
     const callbackId = `${action}_${Date.now()}`;
     activeFetchCallbacks.set(callbackId, { resolve, reject, timeout });
 
@@ -163,13 +311,21 @@ async function sendActiveFetchCommand(tabId, action, payload) {
         activeFetchCallbacks.delete(callbackId);
         reject(new Error(chrome.runtime.lastError.message));
       }
+      // Success: wait for result via ACTIVE_FETCH_RESULT message
     });
   });
 }
 
-const activeFetchCallbacks = new Map();
-
-// Find an active Athena tab
+/**
+ * findAthenaTab()
+ * ---------------
+ * Finds a tab with an active Athena session.
+ *
+ * Used for active fetch commands - we need to know which tab
+ * to send the command to.
+ *
+ * @returns {number|null} - Tab ID or null if none found
+ */
 function findAthenaTab() {
   for (const [tabId, info] of athenaTabs) {
     if (info.active) return tabId;
@@ -177,19 +333,45 @@ function findAthenaTab() {
   return null;
 }
 
-// ============================================================
+// =============================================================================
 // MESSAGE HANDLERS
-// ============================================================
-
+// =============================================================================
+/**
+ * Runtime Message Listener
+ * ------------------------
+ * Handles all incoming messages from content scripts and popup.
+ *
+ * Message Types:
+ *
+ * API_CAPTURE
+ * - Source: injector.js (content script)
+ * - Contains: Captured API response data
+ * - Action: Forward to backend via sendToLocalService()
+ *
+ * ACTIVE_FETCH_RESULT
+ * - Source: injector.js relaying from activeFetcher.js
+ * - Contains: Result of active fetch command
+ * - Action: Resolve pending callback, send to backend
+ *
+ * INITIATE_ACTIVE_FETCH
+ * - Source: popup.js or external frontend
+ * - Contains: Action and payload for active fetch
+ * - Action: Route to appropriate Athena tab
+ *
+ * GET_STATUS
+ * - Source: popup.js
+ * - Action: Return current status for display
+ */
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const tabId = sender.tab?.id || 'unknown';
 
-  // Track Athena tabs
+  // TRACK ATHENA TABS
+  // Any message from an Athena tab registers that tab
   if (sender.tab?.url?.includes('athenahealth.com')) {
     athenaTabs.set(tabId, { active: true, url: sender.tab.url });
   }
 
-  // Handle passive interception (existing)
+  // PASSIVE CAPTURE RELAY (Primary data flow)
   if (message.type === 'API_CAPTURE') {
     Logger.data('PASSIVE CAPTURE', {
       source: message.payload?.source,
@@ -197,11 +379,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       url: message.payload?.url?.substring(0, 50) + '...'
     });
 
+    // CRITICAL: Send to backend immediately
     sendToLocalService(message.payload);
     sendResponse({ received: true, queued: connectionStatus !== 'connected' });
   }
 
-  // Handle active fetch results from content script
+  // ACTIVE FETCH RESULT (from content script)
   if (message.type === 'ACTIVE_FETCH_RESULT') {
     Logger.active('ACTIVE FETCH RESULT', {
       action: message.action,
@@ -209,6 +392,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       callbackId: message.callbackId
     });
 
+    // Resolve pending callback
     const callback = activeFetchCallbacks.get(message.callbackId);
     if (callback) {
       clearTimeout(callback.timeout);
@@ -216,7 +400,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       callback.resolve(message.payload);
     }
 
-    // Also forward to backend
+    // Also forward to backend for processing
     sendToLocalService({
       url: `active-fetch/${message.action}`,
       method: 'ACTIVE',
@@ -230,16 +414,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     updateBadge('passive'); // Reset badge
   }
 
-  // Handle requests from frontend to initiate active fetch
+  // INITIATE ACTIVE FETCH (from popup/frontend)
   if (message.type === 'INITIATE_ACTIVE_FETCH') {
     const athenaTabId = findAthenaTab();
-    
+
     if (!athenaTabId) {
       Logger.error('No active Athena tab found');
       sendResponse({ error: 'No active Athena session. Please open AthenaNet.' });
       return true;
     }
 
+    // Async: send command and wait for result
     sendActiveFetchCommand(athenaTabId, message.action, message.payload)
       .then(result => {
         sendResponse({ success: true, data: result });
@@ -248,10 +433,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ success: false, error: error.message });
       });
 
-    return true; // Keep channel open for async response
+    return true; // Keep message channel open for async response
   }
 
-  // Status request
+  // STATUS REQUEST (from popup)
   if (message.type === 'GET_STATUS') {
     const status = {
       connectionStatus,
@@ -265,10 +450,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse(status);
   }
 
-  return true;
+  return true; // Keep message channel open
 });
 
-// Track tab closures
+// =============================================================================
+// TAB LIFECYCLE TRACKING
+// =============================================================================
+/**
+ * Track tab closures to clean up Athena tab registry.
+ * Prevents stale tab references in athenaTabs map.
+ */
 chrome.tabs.onRemoved.addListener((tabId) => {
   if (athenaTabs.has(tabId)) {
     athenaTabs.delete(tabId);
@@ -276,14 +467,20 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   }
 });
 
-// ============================================================
-// EXTERNAL MESSAGE HANDLER (from frontend WebSocket)
-// ============================================================
-
-// Listen for messages from the frontend via native messaging or fetch
+// =============================================================================
+// EXTERNAL MESSAGE HANDLER
+// =============================================================================
+/**
+ * External Message Listener
+ * -------------------------
+ * Handles messages from external sources (e.g., frontend app).
+ *
+ * Enabled via manifest.json externally_connectable.
+ * Allows localhost apps to trigger active fetch without popup.
+ */
 chrome.runtime.onMessageExternal?.addListener((message, sender, sendResponse) => {
   Logger.info('External message received:', message);
-  
+
   if (message.type === 'ACTIVE_FETCH') {
     const athenaTabId = findAthenaTab();
     if (athenaTabId) {
@@ -296,12 +493,26 @@ chrome.runtime.onMessageExternal?.addListener((message, sender, sendResponse) =>
   }
 });
 
-// Health check ping
+// =============================================================================
+// HEALTH CHECK SYSTEM
+// =============================================================================
+/**
+ * Periodic Health Check
+ * ---------------------
+ * Pings backend /health endpoint every 10 seconds.
+ *
+ * Purposes:
+ * 1. Detect when backend comes online/offline
+ * 2. Update badge status
+ * 3. Keep service worker alive during active use
+ *
+ * Uses AbortSignal.timeout for 5-second timeout to prevent hanging.
+ */
 setInterval(async () => {
   try {
     const res = await fetch(`${LOCAL_SERVICE_URL}/health`, {
       method: 'GET',
-      signal: AbortSignal.timeout(5000)
+      signal: AbortSignal.timeout(5000)  // 5 second timeout
     });
 
     const oldStatus = connectionStatus;
@@ -317,9 +528,17 @@ setInterval(async () => {
       updateBadge();
     }
   }
-}, 10000);
+}, 10000); // Every 10 seconds
 
-// Initial health check
+// =============================================================================
+// INITIALIZATION
+// =============================================================================
+/**
+ * Initial Health Check
+ * --------------------
+ * Check backend availability at startup.
+ * Delayed 1 second to allow service worker to fully initialize.
+ */
 setTimeout(async () => {
   Logger.info('Initial health check...');
   try {

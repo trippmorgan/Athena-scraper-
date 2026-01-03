@@ -1,239 +1,175 @@
-# AthenaNet Shadow EHR: Surgical Command Center
+# Shadow EHR Bridge: Vascular Surgery Command Center
 
-## Real-Time Clinical Intelligence for Vascular Surgery Decision Support
+## Mission
 
-**Version:** 2.0.0
-**Architecture:** 4-Layer Clinical Processing Pipeline
-**AI Providers:** Claude (Anthropic), GPT-4 (OpenAI), Gemini (Google)
-**Data Standard:** HL7 FHIR R4
+> **Unify clinical data from disparate sources into a coherent, surgeon-centric workflow
+> for vascular surgery planning, execution, and quality reporting.**
 
----
-
-## Overview
-
-The **Surgical Command Center** is a clinical decision support system that extracts real-time patient data from AthenaHealth EHR through browser-level API interception. It provides vascular surgeons with:
-
-- **Antithrombotic Management Alerts** - Critical perioperative medication tracking
-- **Cardiovascular Risk Assessment** - RCRI-like automated risk stratification
-- **AI-Powered Surgical Briefings** - Context-aware clinical summaries
-- **Real-Time Data Stream** - FHIR-normalized clinical data as physicians navigate
+This system solves a fundamental problem: **vascular surgeons spend 40%+ of their time on documentation** while clinical data lives in silos across EHR systems, imaging platforms, and lab systems. Shadow EHR Bridge captures, synthesizes, and presents this data in a surgical workflow context.
 
 ---
 
-## Table of Contents
+## The Complete Data Flow
 
-1. [Quick Start](#quick-start)
-2. [4-Layer Architecture](#4-layer-architecture)
-3. [AI Integration](#ai-integration)
-4. [API Reference](#api-reference)
-5. [Configuration](#configuration)
-6. [Installation](#installation)
-7. [Troubleshooting](#troubleshooting)
+```
+    ┌─────────────────────────────────────────────────────────────────────────────────┐
+    │                           VASCULAR SURGERY DATA ECOSYSTEM                        │
+    └─────────────────────────────────────────────────────────────────────────────────┘
+
+    DATA SOURCES                    SHADOW EHR                    CLINICAL OUTPUTS
+    ============                    ==========                    ================
+
+    ┌─────────────┐                ┌─────────────┐               ┌──────────────────┐
+    │  Athena EHR │───────────────>│             │───────────────│  PRE-OP PLANNING │
+    │  (Primary)  │                │   Shadow    │               │  - Risk assess   │
+    │  - Meds     │                │   EHR       │               │  - Antithrombotic│
+    │  - Problems │                │   Backend   │               │  - Consent prep  │
+    │  - Labs     │                │             │               └──────────────────┘
+    │  - Vitals   │                │   Python    │
+    │  - Docs     │                │   FastAPI   │               ┌──────────────────┐
+    └─────────────┘                │             │───────────────│  INTRA-OP        │
+                                   │   FHIR R4   │               │  - Quick ref     │
+    ┌─────────────┐                │   Transform │               │  - Imaging       │
+    │  Ultralinq  │───────────────>│             │               │  - Allergies     │
+    │  (Planned)  │                │             │               └──────────────────┘
+    │  - Echo     │                │   WebSocket │
+    │  - Vascular │                │   Realtime  │               ┌──────────────────┐
+    │    labs     │                │             │───────────────│  POST-OP NOTES   │
+    └─────────────┘                └─────────────┘               │  - Op note draft │
+                                          │                      │  - Dictation aid │
+    ┌─────────────┐                       │                      └──────────────────┘
+    │  Imaging    │───────────────────────┘
+    │  (Planned)  │                                              ┌──────────────────┐
+    │  - CTA/MRA  │                                              │  QUALITY/VQI     │
+    │  - Duplex   │                                              │  - Registry data │
+    └─────────────┘                                              │  - Outcomes      │
+                                                                 └──────────────────┘
+                                                                         │
+                                                                         v
+                                                                 ┌──────────────────┐
+                                                                 │ PLAUD/VASCULAR AI│
+                                                                 │ - Transcription  │
+                                                                 │ - AI Analysis    │
+                                                                 └──────────────────┘
+```
+
+---
+
+## How It Works
+
+### The Golden Path: Athena → Extension → Backend → Frontend
+
+```
+┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐
+│  ATHENA BROWSER  │     │ CHROME EXTENSION │     │  PYTHON BACKEND  │     │  REACT FRONTEND  │
+│                  │     │                  │     │                  │     │                  │
+│  Athena web app  │     │  interceptor.js  │     │     main.py      │     │ SurgicalDashboard│
+│  makes API calls │────>│  captures resp   │────>│  transforms to   │────>│  displays        │
+│                  │     │                  │     │  FHIR R4         │     │  clinical data   │
+│  (We observe,    │     │  injector.js     │     │                  │     │                  │
+│   don't modify)  │     │  bridges context │     │  narrative_engine│     │  NarrativeCard   │
+│                  │     │                  │     │  generates text  │     │  shows AI output │
+│                  │     │  background.js   │     │                  │     │                  │
+│                  │     │  relays to /in.. │     │  WebSocket push  │     │  auto-updates    │
+└──────────────────┘     └──────────────────┘     └──────────────────┘     └──────────────────┘
+
+Key Principle: Data flows PASSIVELY. We OBSERVE Athena's own API responses.
+              We do NOT inject requests or modify the EHR application.
+```
 
 ---
 
 ## Quick Start
 
 ```bash
-# 1. Clone and install
-git clone https://github.com/your-org/athena-shadow-ehr.git
-cd athena-shadow-ehr
+# 1. Clone the repository
+git clone <repo-url>
+cd shadow-ehr-bridge
 
-# 2. Install backend dependencies
+# 2. Start the backend
 cd backend
 pip install -r requirements.txt
-conda activate shadow-ehr
-
-# 3. Configure API keys (edit .env)
-cp .env.example .env
-# Add your ANTHROPIC_API_KEY, OPENAI_API_KEY, or use existing GEMINI_API_KEY
-
-# 4. Start backend
 python main.py
+# Backend runs at http://localhost:8000
 
-# 5. Load Chrome extension
-# Go to chrome://extensions → Enable Developer Mode → Load unpacked → select extension/
+# 3. Load the Chrome extension
+# - Go to chrome://extensions
+# - Enable Developer Mode
+# - Click "Load unpacked"
+# - Select the extension/ folder
 
-# 6. Start frontend (optional)
-cd ../frontend && npm install && npm run dev
- 
+# 4. Start the frontend (optional)
+npm install
+npm run dev
+# Frontend runs at http://localhost:5173
+
+# 5. Navigate to Athena
+# - Open AthenaNet in Chrome
+# - Browse patient charts
+# - Data flows automatically to Shadow EHR
 ```
 
 ---
 
-## 4-Layer Architecture
+## Architecture Overview
 
-The system processes clinical data through four specialized layers:
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                        SURGICAL COMMAND CENTER                               │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  LAYER 1: RAW EVENT STORE                                                   │
-│  ┌────────────────────────────────────────────────────────────────────────┐ │
-│  │  • Captures ALL intercepted API payloads                               │ │
-│  │  • Persists to data/raw_events.jsonl                                   │ │
-│  │  • Enables replay, audit, and drift detection                          │ │
-│  │  • Endpoints: /events/raw                                              │ │
-│  └────────────────────────────────────────────────────────────────────────┘ │
-│                                    │                                         │
-│                                    ▼                                         │
-│  LAYER 2: EVENT INDEXER                                                     │
-│  ┌────────────────────────────────────────────────────────────────────────┐ │
-│  │  • Classifies events by clinical category                              │ │
-│  │  • Categories: medication, problem, vital, lab, allergy, etc.          │ │
-│  │  • URL pattern matching + payload key inspection                       │ │
-│  │  • Confidence scoring for classification quality                       │ │
-│  │  • Endpoints: /index/query, /index/stats, /index/reindex              │ │
-│  └────────────────────────────────────────────────────────────────────────┘ │
-│                                    │                                         │
-│                                    ▼                                         │
-│  LAYER 3: CLINICAL INTERPRETERS                                             │
-│  ┌────────────────────────────────────────────────────────────────────────┐ │
-│  │  MedicationInterpreter:                                                │ │
-│  │    • Extracts from Athena's Events[].Instance.DisplayName              │ │
-│  │    • Flags antithrombotics (clopidogrel, warfarin, DOACs, etc.)       │ │
-│  │    • Categorizes: anticoagulants vs antiplatelets                     │ │
-│  │                                                                        │ │
-│  │  ProblemInterpreter:                                                   │ │
-│  │    • Extracts ICD-10 and SNOMED codes                                 │ │
-│  │    • Flags vascular conditions (I70-I74, I77)                         │ │
-│  │    • Identifies CV risk factors (diabetes, CKD, CAD, CHF)             │ │
-│  │                                                                        │ │
-│  │  Endpoints: /clinical/{patient_id}, /clinical/{patient_id}/medications│ │
-│  └────────────────────────────────────────────────────────────────────────┘ │
-│                                    │                                         │
-│                                    ▼                                         │
-│  LAYER 4: AI SUMMARIZER                                                     │
-│  ┌────────────────────────────────────────────────────────────────────────┐ │
-│  │  • Template-based surgical briefings (no API needed)                   │ │
-│  │  • LLM-enhanced summaries via Claude, GPT-4, or Gemini                │ │
-│  │  • RCRI-like cardiovascular risk assessment                           │ │
-│  │  • Medication management alerts with hold recommendations             │ │
-│  │                                                                        │ │
-│  │  Endpoints: /ai/briefing/{patient_id}, /ai/risk/{patient_id}          │ │
-│  │             /ai/med-alert/{patient_id}, /ai/context/{patient_id}      │ │
-│  └────────────────────────────────────────────────────────────────────────┘ │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+| Layer | Component | Purpose |
+|-------|-----------|---------|
+| **Capture** | interceptor.js | Hooks fetch/XHR in Athena page context |
+| **Bridge** | injector.js | Content script bridging page → extension |
+| **Relay** | background.js | Service worker → HTTP POST to backend |
+| **Process** | main.py | FastAPI, patient cache, WebSocket hub |
+| **Transform** | fhir_converter.py | Raw Athena → FHIR R4 resources |
+| **Synthesize** | vascular_parser.py | Surgeon-centric profiles, antithrombotic flags |
+| **Narrate** | narrative_engine.py | LLM-generated surgical narratives |
+| **Display** | SurgicalDashboard.tsx | Clinical dashboard with phase-based view |
 
 ---
 
-## AI Integration
+## Key Features
 
-### Supported Providers
+### Antithrombotic Management
+Automatically identifies and categorizes blood thinners:
+- **Antiplatelets:** Aspirin, Clopidogrel (Plavix), Ticagrelor, Prasugrel
+- **Anticoagulants:** Warfarin, DOACs (Xarelto, Eliquis, Pradaxa), Heparin
 
-| Provider | Model | Best For | Cost |
-|----------|-------|----------|------|
-| **Claude** | claude-sonnet-4-20250514 | Complex medical reasoning | ~$3/M tokens |
-| **GPT-4** | gpt-4-turbo-preview | Backup option | ~$10/M tokens |
-| **Gemini** | gemini-pro | Free tier available | Free/Low |
-| **Template** | N/A | Fast, reliable (default) | Free |
+### Cardiovascular Risk Assessment
+RCRI-like scoring based on extracted problem list:
+- CAD, CHF, Diabetes, CKD, CVA, High-risk surgery
 
-### Configuration
+### Real-Time Updates
+- WebSocket streaming from backend to frontend
+- Patient data updates as you navigate in Athena
+- No manual refresh needed
 
-Add API keys to `.env`:
-
-```ini
-# Anthropic Claude (recommended for medical reasoning)
-ANTHROPIC_API_KEY=sk-ant-...
-
-# OpenAI GPT-4 (backup)
-OPENAI_API_KEY=sk-...
-
-# Google Gemini (already configured)
-GEMINI_API_KEY=AIzaSy...
-GOOGLE_API_KEY=AIzaSy...
-```
-
-### Usage
-
-The system defaults to **template-based briefings** (fast, no API calls). To use LLM-enhanced summaries:
-
-```bash
-# Template-based (default, no API needed)
-curl http://localhost:8000/ai/briefing/12345
-
-# Get context formatted for any LLM
-curl "http://localhost:8000/ai/context/12345?format=prompt"
-```
+### AI-Powered Narratives
+Gemini-generated pre-op summaries including:
+- Patient demographics and history
+- Surgical risk assessment
+- Anticoagulation management recommendations
+- Procedure-specific considerations
 
 ---
 
 ## API Reference
 
-### Layer 1: Raw Events
+### WebSocket (Primary)
+```
+ws://localhost:8000/ws/frontend
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/events/raw` | GET | Get raw intercepted events |
-| `/events/index` | GET | Get interpreter index entries |
+Messages:
+  PATIENT_UPDATE  - Patient data changed
+  LOG_ENTRY       - API capture logged
+  STATUS_UPDATE   - Connection status
+  PING            - Heartbeat
+```
 
-### Layer 2: Event Indexer
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/index/query` | GET | Query indexed events with filters |
-| `/index/stats` | GET | Get category statistics |
-| `/index/reindex` | POST | Reprocess all raw events |
-
-**Query Parameters:**
-- `patient_id` - Filter by patient
-- `category` - medication, problem, vital, lab, allergy, compound
-- `source_type` - passive_intercept, active_fetch
-- `min_confidence` - 0.0 to 1.0
-
-### Layer 3: Clinical Interpreters
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/clinical/{patient_id}` | GET | All interpreted data for patient |
-| `/clinical/{patient_id}/medications` | GET | Medications (use `?antithrombotic_only=true`) |
-| `/clinical/{patient_id}/problems` | GET | Problems (use `?vascular_only=true`) |
-| `/clinical/{patient_id}/summary` | GET | Clinical summary for vascular surgery |
-| `/clinical/interpreters` | GET | List registered interpreters |
-
-### Layer 4: AI Summarizer
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/ai/briefing/{patient_id}` | GET | Surgical briefing with antithrombotic alerts |
-| `/ai/med-alert/{patient_id}` | GET | Medication management alerts |
-| `/ai/risk/{patient_id}` | GET | RCRI-like cardiovascular risk score |
-| `/ai/context/{patient_id}` | GET | Structured context (JSON or prompt format) |
-
-### Layer 5: Artifact & Document Downloads
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/session/context` | POST | Update session context from Chrome extension |
-| `/session/context` | GET | Get current session status |
-| `/artifacts` | GET | List stored artifacts (`?patient_id=xxx`) |
-| `/artifacts/stats` | GET | Storage statistics |
-| `/artifacts/{artifact_id}` | GET | Get artifact metadata |
-| `/artifacts/{artifact_id}/download` | GET | Download artifact (base64) |
-| `/artifacts/detect-missing` | POST | Detect missing documents from payload |
-| `/artifacts/download` | POST | Download single document (HTTP-first) |
-| `/artifacts/batch-download` | POST | Download multiple documents |
-
-**Download Strategy:**
-1. **HTTP-First** - Uses captured session cookies (fast, no browser)
-2. **Selenium Fallback** - Only if HTTP fails and enabled (isolated service)
-
-### WebSocket Endpoints
-
-| Endpoint | Purpose |
-|----------|---------|
-| `ws://localhost:8000/ws/chrome` | Chrome extension connection |
-| `ws://localhost:8000/ws/frontend` | React frontend connection |
-
-**Message Types (Server → Client):**
-```json
-{"type": "PATIENT_UPDATE", "data": {...}}
-{"type": "CLINICAL_UPDATE", "data": {"patient_id": "...", "category": "medication", "records": [...]}}
-{"type": "LOG_ENTRY", "data": {...}}
+### REST API
+```
+POST /ingest                    - Receive captured data
+GET  /active/profile/{id}       - Get vascular profile
+GET  /narrative/generate/{id}   - Generate pre-op narrative
+GET  /health                    - Health check
 ```
 
 ---
@@ -241,199 +177,98 @@ curl "http://localhost:8000/ai/context/12345?format=prompt"
 ## Configuration
 
 ### Environment Variables (.env)
-
 ```ini
-# ============================================================================
-# AI PROVIDER API KEYS (for Clinical Summarization)
-# ============================================================================
+# AI Provider (for narrative generation)
+GEMINI_API_KEY=AIza...
 
-# Anthropic Claude (recommended for medical reasoning)
-ANTHROPIC_API_KEY=
-
-# OpenAI GPT-4 (backup option)
-OPENAI_API_KEY=
-
-# Google Gemini
-GEMINI_API_KEY=your_key_here
-GOOGLE_API_KEY=your_key_here
-
-# ============================================================================
-# BACKEND CONFIGURATION
-# ============================================================================
+# Backend
 BACKEND_PORT=8000
-BACKEND_HOST=0.0.0.0
 
-# ============================================================================
-# FRONTEND CONFIGURATION
-# ============================================================================
+# Frontend
 VITE_API_URL=http://localhost:8000
-VITE_EXTENSION_ID=your_extension_id_here
 ```
 
-### Clinical Categories (Event Indexer)
-
-The Event Indexer classifies events into these categories:
-
-| Category | Description | Example Patterns |
-|----------|-------------|------------------|
-| `medication` | Medication lists | `sources=active_medications` |
-| `problem` | Diagnoses, conditions | `sources=active_problems` |
-| `vital` | Vital signs | `sources=measurements` |
-| `lab` | Lab results | `sources=lab` |
-| `allergy` | Allergies | `sources=allergies` |
-| `compound` | Multi-source requests | `active-fetch/FETCH_ALL` |
-| `encounter` | Visit data | `encounter_sections` |
-| `demographic` | Patient demographics | `sources=demographics` |
-
-### Antithrombotic Keywords (MedicationInterpreter)
-
-Automatically flagged medications:
-- Antiplatelets: aspirin, clopidogrel (Plavix), ticagrelor, prasugrel
-- Anticoagulants: warfarin, heparin, enoxaparin, rivaroxaban (Xarelto), apixaban (Eliquis), dabigatran (Pradaxa)
-
-### Vascular ICD-10 Codes (ProblemInterpreter)
-
-| Prefix | Condition |
-|--------|-----------|
-| I70 | Atherosclerosis |
-| I71 | Aortic aneurysm |
-| I72 | Other aneurysm |
-| I73 | Peripheral vascular diseases |
-| I74 | Arterial embolism/thrombosis |
-| I77 | Arterial disorders |
-
----
-
-## Installation
-
-### System Requirements
-
-| Component | Requirement |
-|-----------|-------------|
-| Python | 3.10+ |
-| Node.js | 18+ |
-| Chrome | 120+ |
-| RAM | 8GB minimum |
-
-### Backend Setup
-
-```bash
-cd backend
-
-# Option 1: pip
-pip install fastapi uvicorn websockets pydantic python-dotenv
-pip install anthropic openai google-generativeai  # For AI providers
-
-# Option 2: conda
-conda env create -f environment.yml
-conda activate shadow-ehr
-
-# Start server
-python main.py
-```
-
-### Chrome Extension
-
-1. Navigate to `chrome://extensions`
-2. Enable **Developer mode**
-3. Click **Load unpacked**
-4. Select the `extension/` folder
-5. Verify badge shows connection status
-
-### Frontend (Optional)
-
-```bash
-cd frontend
-npm install
-npm run dev
+### CORS (main.py)
+If running frontend on different ports, update `allow_origins` in main.py:
+```python
+allow_origins=[
+    "http://localhost:3000", "http://localhost:3001",
+    "http://localhost:3002", "http://localhost:3003",
+    "http://localhost:5173", "http://127.0.0.1:3000",
+]
 ```
 
 ---
 
 ## Troubleshooting
 
-### Backend Won't Start
-
-```bash
-# Check if port is in use
-lsof -i :8000
-
-# Kill existing process
-kill -9 $(lsof -t -i:8000)
-
-# Restart
-cd backend && python main.py
-```
-
 ### No Data Appearing
+1. Check extension badge (should show "ON")
+2. Check browser console for `[AthenaNet Bridge]` logs
+3. Check backend terminal for "INCOMING ATHENA PAYLOAD"
+4. Reload extension and refresh Athena tab
 
-1. Verify Chrome extension is enabled
-2. Check extension console for errors (right-click extension icon → Inspect)
-3. Verify backend is running: `curl http://localhost:8000/health`
-4. Check backend logs for incoming connections
+### CORS Errors
+Update `allow_origins` in main.py to include your frontend port.
 
-### AI Endpoints Return Errors
-
-1. Verify API keys are set in `.env`
-2. Check backend logs: `[AI] Available LLM providers: ['claude', 'gpt4', 'gemini']`
-3. Template-based briefings work without any API keys
-
-### High UNKNOWN Event Rate
-
-Check `/index/stats` for category distribution. If many events are UNKNOWN:
-- Review endpoint patterns in `backend/event_indexer.py`
-- Add new URL patterns to `self.url_patterns` list
+### Active Fetch Returns 500
+Active fetch requires session headers from passive capture.
+Navigate manually in Athena first, then try active fetch.
 
 ---
 
-## Architecture Details
+## Documentation
 
-### Data Flow
+| Document | Purpose |
+|----------|---------|
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Complete system architecture, data flow diagrams, component deep dives |
+| [INSTALL.md](INSTALL.md) | Detailed installation and configuration guide |
 
-```
-AthenaNet EHR → Chrome Extension → WebSocket → FastAPI Backend
-                                                      │
-                                   ┌──────────────────┼──────────────────┐
-                                   ▼                  ▼                  ▼
-                            Raw Event Store    Event Indexer    Clinical Interpreters
-                            (Layer 1)          (Layer 2)        (Layer 3)
-                                   │                  │                  │
-                                   └──────────────────┼──────────────────┘
-                                                      ▼
-                                              AI Summarizer (Layer 4)
-                                                      │
-                                                      ▼
-                                              Surgical Briefing
-```
+---
 
-### Key Files
+## Clinical Workflow Integration
 
-| File | Purpose |
-|------|---------|
-| `backend/main.py` | FastAPI server, WebSocket handling, API endpoints |
-| `backend/event_indexer.py` | Layer 2: Clinical category classification |
-| `backend/clinical_interpreters.py` | Layer 3: Medication/problem extraction |
-| `backend/ai_summarizer.py` | Layer 4: AI-powered clinical summaries |
-| `backend/provenance.py` | Medico-legal traceability for all data |
-| `backend/files/session_context.py` | Browser session auth capture |
-| `backend/files/http_fetcher.py` | HTTP-first document downloads |
-| `backend/files/artifact_store.py` | Document storage with provenance |
-| `backend/files/download_manager.py` | Layer 5: HTTP + Selenium fallback orchestration |
-| `backend/artifacts/missing_detector.py` | Detect missing documents for download |
-| `extension/interceptor.js` | Browser API interception |
-| `extension/activeFetcher.js` | Active data fetching with throttling |
+### Pre-Op Clinic
+1. Open patient in Athena
+2. Shadow EHR captures data automatically
+3. View synthesized pre-op narrative
+4. Review antithrombotic management
+5. Complete surgical consent
+
+### Intra-Op
+1. Quick reference for allergies, medications
+2. Access imaging reports
+3. Problem list for comorbidity awareness
+
+### Post-Op
+1. Dictate operative findings
+2. Shadow EHR provides structured data for note
+3. Export to Plaud for transcription
+
+### Quality Reporting
+1. Procedure data captured during workflow
+2. Export to VQI-compatible format
+3. Submit to registry
 
 ---
 
 ## Security Notes
 
-- All processing occurs locally (localhost)
-- PHI is not transmitted except to configured AI providers
-- Patient data is held in RAM only (ephemeral)
-- No credentials are stored or captured
-- API keys should never be committed to version control
-- Session cookies are used for HTTP downloads (short-lived)
-- Selenium fallback runs in isolated service (optional)
+- **Local Processing:** All data processing on localhost
+- **PHI Handling:** Patient data in RAM only (ephemeral)
+- **No Credentials:** System does not store login credentials
+- **API Keys:** Never commit to version control
+- **Session Data:** Used only for HTTP downloads (short-lived)
+
+---
+
+## Version
+
+| Version | Changes |
+|---------|---------|
+| 2.1.0 | WebSocket data flow fix, CORS expansion, architecture documentation |
+| 2.0.0 | 4-layer architecture, vascular surgery focus |
+| 1.0.0 | Initial release |
 
 ---
 
@@ -443,10 +278,5 @@ For research and educational purposes. Production clinical use requires regulato
 
 ---
 
-## Version History
-
-| Version | Changes |
-|---------|---------|
-| 2.1.0 | Layer 5: HTTP-first document downloads, provenance tracking, Selenium fallback |
-| 2.0.0 | 4-layer architecture, multi-LLM support, vascular surgery focus |
-| 1.0.0 | Initial release with Gemini integration |
+*Maintainer: Vascular Surgery Informatics Team*
+*Last Updated: 2026-01-02*

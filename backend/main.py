@@ -630,7 +630,8 @@ class ConnectionManager:
             patient_data=cache.get('patient'),
             vitals_data=cache.get('vitals'),
             medications_data=cache.get('medications'),
-            problems_data=cache.get('problems')
+            problems_data=cache.get('problems'),
+            unknown_data=cache.get('unknown')
         )
 
         logger.info("=" * 60)
@@ -712,10 +713,14 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS middleware for REST endpoints
+# CORS middleware for REST endpoints - allow all localhost ports for dev
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],
+    allow_origins=[
+        "http://localhost:3000", "http://localhost:3001", "http://localhost:3002",
+        "http://localhost:3003", "http://localhost:3004", "http://localhost:3005",
+        "http://localhost:5173", "http://127.0.0.1:3000", "http://127.0.0.1:5173"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -1508,7 +1513,8 @@ async def get_patient(patient_id: str):
             patient_data=cache.get('patient'),
             vitals_data=cache.get('vitals'),
             medications_data=cache.get('medications'),
-            problems_data=cache.get('problems')
+            problems_data=cache.get('problems'),
+            unknown_data=cache.get('unknown')
         )
         logger.info(f"Patient found: {patient.name}")
         return {"patient": patient.model_dump()}
@@ -1529,7 +1535,8 @@ async def list_patients():
             patient_data=cache.get('patient'),
             vitals_data=cache.get('vitals'),
             medications_data=cache.get('medications'),
-            problems_data=cache.get('problems')
+            problems_data=cache.get('problems'),
+            unknown_data=cache.get('unknown')
         )
         patients.append(patient.model_dump())
 

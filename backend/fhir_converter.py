@@ -457,42 +457,80 @@ def convert_problems(payload: Any) -> List[FHIRCondition]:
     Convert AthenaNet problems/diagnoses to FHIR Condition list.
 
     ATHENA STRUCTURE (verified from traffic analysis):
-    active_problems.Problems[] = {
-        Name: "intermittent claudication..."      ← PRIMARY DISPLAY NAME
-        Code: {
-            Code: "12236951000119108"             ← SNOMED CODE
-            Description: "..."                    ← SNOMED DESCRIPTION
-            CodeSet: "SNOMED"
+    {
+        active_problems: {
+            Problems: [
+                {
+                    Name: "intermittent claudication..."   ← PRIMARY DISPLAY NAME
+                    Code: {
+                        Code: "12236951000119108"          ← SNOMED CODE
+                        Description: "..."                 ← SNOMED DESCRIPTION
+                        CodeSet: "SNOMED"
+                    }
+                    PatientSnomedICD10s: [                 ← ICD-10 MAPPINGS
+                        {
+                            DIAGNOSISCODE: "I70213"        ← ICD-10 CODE
+                            FULLDESCRIPTION: "..."         ← ICD-10 DESCRIPTION
+                        }
+                    ]
+                    Status: "active"
+                    Primary: false
+                }
+            ]
         }
-        PatientSnomedICD10s: [                    ← ICD-10 MAPPINGS
-            {
-                DIAGNOSISCODE: "I70213"           ← ICD-10 CODE
-                FULLDESCRIPTION: "..."            ← ICD-10 DESCRIPTION
-            }
-        ]
-        Status: "active"
-        Primary: false
     }
     """
     conditions = []
+
+    logger.info(f"[FHIR] convert_problems received type: {type(payload).__name__}")
+    if isinstance(payload, dict):
+        logger.info(f"[FHIR] convert_problems keys: {list(payload.keys())[:15]}")
 
     # Handle various payload structures
     prob_list = []
     if isinstance(payload, list):
         prob_list = payload
+        logger.info(f"[FHIR] Payload is list with {len(prob_list)} items")
     elif isinstance(payload, dict):
-        # Athena structure: active_problems.Problems[]
-        if 'Problems' in payload:
+        # =========================================================================
+        # ATHENA WRAPPER: Check for active_problems, historical_problems wrappers
+        # =========================================================================
+        if 'active_problems' in payload:
+            inner = payload['active_problems']
+            logger.info(f"[FHIR] Found 'active_problems' wrapper, inner type: {type(inner).__name__}")
+            if isinstance(inner, dict):
+                prob_list = inner.get('Problems', []) or inner.get('problems', [])
+                logger.info(f"[FHIR] Extracted {len(prob_list)} from active_problems.Problems")
+            elif isinstance(inner, list):
+                prob_list = inner
+
+        elif 'historical_problems' in payload:
+            inner = payload['historical_problems']
+            logger.info(f"[FHIR] Found 'historical_problems' wrapper")
+            if isinstance(inner, dict):
+                prob_list = inner.get('Problems', []) or inner.get('problems', [])
+            elif isinstance(inner, list):
+                prob_list = inner
+
+        # Athena structure: Problems[] at top level
+        elif 'Problems' in payload:
             prob_list = payload.get('Problems', [])
+            logger.info(f"[FHIR] Found 'Problems' at top level: {len(prob_list)} items")
+
         # Handle IMO Health categorized format: {'categories': [{'problems': [...]}]}
         elif 'categories' in payload:
             for category in payload.get('categories', []):
                 cat_problems = category.get('problems', [])
                 prob_list.extend(cat_problems)
+            logger.info(f"[FHIR] Extracted {len(prob_list)} from categories")
+
+        # Fallback: lowercase keys
         else:
             prob_list = payload.get('problems') or payload.get('diagnoses') or payload.get('conditions') or []
             if not prob_list and 'problem' in payload:
                 prob_list = [payload]
+            if prob_list:
+                logger.info(f"[FHIR] Fallback extraction: {len(prob_list)} items")
 
     for prob in prob_list:
         if isinstance(prob, dict):
@@ -556,35 +594,107 @@ def convert_problems(payload: Any) -> List[FHIRCondition]:
 
 
 def convert_patient(payload: Any, patient_id: Optional[str] = None) -> FHIRPatient:
-    """Convert AthenaNet patient data to FHIR Patient resource."""
+    """
+    Convert AthenaNet patient data to FHIR Patient resource.
+
+    ATHENA STRUCTURE:
+    The demographics endpoint returns data in various nested formats:
+    - {demographics: {FirstName, LastName, BirthDate, ...}}
+    - {patient: {FirstName, LastName, ...}}
+    - {FirstName, LastName, ...} (direct)
+
+    We check all possible structures to find patient data.
+    """
     if not isinstance(payload, dict):
         return FHIRPatient(id=patient_id or generate_id(payload))
 
-    # Extract name components (handle both camelCase and PascalCase)
-    first_name = (payload.get('firstName') or payload.get('FirstName') or
-                  payload.get('first_name') or payload.get('givenName') or '')
-    last_name = (payload.get('lastName') or payload.get('LastName') or
-                 payload.get('last_name') or payload.get('familyName') or '')
-    full_name = payload.get('patientName') or payload.get('name') or f"{first_name} {last_name}".strip()
+    logger.info(f"[FHIR] convert_patient received keys: {list(payload.keys())[:15]}")
 
-    # Extract identifiers
+    # =========================================================================
+    # STEP 1: Find the actual patient data object
+    # Athena wraps data in various nested structures
+    # =========================================================================
+    patient_data = payload  # Start with full payload
+
+    # Check for 'demographics' wrapper (sources=demographics returns this)
+    if 'demographics' in payload:
+        demo = payload['demographics']
+        logger.info(f"[FHIR] Found 'demographics' wrapper, type: {type(demo).__name__}")
+        if isinstance(demo, dict):
+            # Check for success/data wrapper
+            if 'data' in demo:
+                patient_data = demo['data']
+                logger.info(f"[FHIR] Using demographics.data")
+            elif demo.get('success') is True and 'data' in demo:
+                patient_data = demo['data']
+            else:
+                # demographics dict might directly contain FirstName, etc.
+                patient_data = demo
+                logger.info(f"[FHIR] Using demographics dict directly")
+
+    # Check for 'patient' wrapper
+    elif 'patient' in payload and isinstance(payload['patient'], dict):
+        patient_data = payload['patient']
+        logger.info(f"[FHIR] Using 'patient' wrapper")
+
+    # Check for 'data' wrapper
+    elif 'data' in payload and isinstance(payload['data'], dict):
+        patient_data = payload['data']
+        logger.info(f"[FHIR] Using 'data' wrapper")
+
+    logger.info(f"[FHIR] Patient data keys after unwrapping: {list(patient_data.keys())[:15]}")
+
+    # =========================================================================
+    # STEP 2: Extract name components (handle both camelCase and PascalCase)
+    # =========================================================================
+    first_name = (patient_data.get('firstName') or patient_data.get('FirstName') or
+                  patient_data.get('first_name') or patient_data.get('givenName') or
+                  patient_data.get('Given') or '')
+    last_name = (patient_data.get('lastName') or patient_data.get('LastName') or
+                 patient_data.get('last_name') or patient_data.get('familyName') or
+                 patient_data.get('Family') or '')
+
+    # Try patientName or name (might be full name string or object)
+    full_name_field = patient_data.get('patientName') or patient_data.get('name') or patient_data.get('Name')
+    if isinstance(full_name_field, dict):
+        full_name = full_name_field.get('full') or f"{full_name_field.get('given', [''])[0]} {full_name_field.get('family', '')}".strip()
+    elif full_name_field:
+        full_name = str(full_name_field)
+    else:
+        full_name = f"{first_name} {last_name}".strip()
+
+    # If still no name, check for DisplayName (Athena sometimes uses this)
+    if not full_name:
+        full_name = patient_data.get('DisplayName') or patient_data.get('displayName') or ''
+
+    # =========================================================================
+    # STEP 3: Extract identifiers (MRN, patient ID)
+    # =========================================================================
     identifiers = []
-    mrn = payload.get('mrn') or payload.get('MRN') or payload.get('patientId') or payload.get('patient_id') or patient_id
+    mrn = (patient_data.get('mrn') or patient_data.get('MRN') or
+           patient_data.get('patientId') or patient_data.get('PatientId') or
+           patient_data.get('patient_id') or patient_data.get('chartId') or
+           patient_data.get('ChartId') or patient_id)
     if mrn:
         identifiers.append({"system": "mrn", "value": str(mrn)})
 
-    # Extract DOB (handle Athena's nested BirthDate structure)
-    dob_raw = (payload.get('dob') or payload.get('dateOfBirth') or
-               payload.get('birthDate') or payload.get('BirthDate'))
+    # =========================================================================
+    # STEP 4: Extract DOB (handle Athena's nested BirthDate structure)
+    # =========================================================================
+    dob_raw = (patient_data.get('dob') or patient_data.get('dateOfBirth') or
+               patient_data.get('birthDate') or patient_data.get('BirthDate') or
+               patient_data.get('DateOfBirth') or patient_data.get('DOB'))
     # Handle Athena's {"__CLASS__": "DateTime", "Date": "1944-02-18"} structure
     if isinstance(dob_raw, dict):
         dob_raw = dob_raw.get('Date') or dob_raw.get('date') or dob_raw.get('value')
     dob = normalize_date(dob_raw)
 
-    # Extract gender (handle both cases)
-    gender = (payload.get('gender') or payload.get('Gender') or
-              payload.get('sex') or payload.get('Sex') or
-              payload.get('GenderMarker') or '')
+    # =========================================================================
+    # STEP 5: Extract gender (handle both cases)
+    # =========================================================================
+    gender = (patient_data.get('gender') or patient_data.get('Gender') or
+              patient_data.get('sex') or patient_data.get('Sex') or
+              patient_data.get('GenderMarker') or patient_data.get('SexMarker') or '')
 
     logger.info(f"[FHIR] convert_patient: name='{full_name}', dob='{dob}', gender='{gender}'")
 
@@ -834,11 +944,15 @@ def build_patient_from_aggregated_data(
     patient_data: Optional[Dict] = None,
     vitals_data: Optional[Dict] = None,
     medications_data: Optional[List] = None,
-    problems_data: Optional[List] = None
+    problems_data: Optional[List] = None,
+    unknown_data: Optional[List] = None
 ) -> Patient:
     """
     Build a complete Patient object from aggregated FHIR data.
     This is used to create the frontend-ready patient structure.
+
+    IMPORTANT: If patient_data is empty/Unknown, we search the unknown_data
+    array for raw Athena patient data that wasn't properly categorized.
     """
     # Extract patient info
     name = "Unknown"
@@ -846,17 +960,63 @@ def build_patient_from_aggregated_data(
     dob = ""
     gender = ""
 
+    # =========================================================================
+    # STEP 1: Try FHIR patient data structure
+    # =========================================================================
     if patient_data:
         if isinstance(patient_data, dict):
             name_obj = patient_data.get('name', {})
             if isinstance(name_obj, dict):
                 name = name_obj.get('full', 'Unknown')
+                # Fallback: construct from given + family
+                if name == 'Unknown' or not name:
+                    given = name_obj.get('given', [])
+                    family = name_obj.get('family', '')
+                    if given or family:
+                        first = given[0] if given else ''
+                        name = f"{first} {family}".strip()
+            elif isinstance(name_obj, str) and name_obj:
+                name = name_obj
+
             identifiers = patient_data.get('identifier', [])
             for ident in identifiers:
                 if ident.get('system') == 'mrn':
                     mrn = ident.get('value', mrn)
             dob = patient_data.get('birthDate', '')
             gender = patient_data.get('gender', '')
+
+    # =========================================================================
+    # STEP 2: Search unknown array for patient demographics (fallback)
+    # Sometimes Athena demographics get stored as 'unknown' record type
+    # =========================================================================
+    if (name == "Unknown" or not name) and unknown_data:
+        logger.debug(f"[FHIR] Searching unknown array for patient data ({len(unknown_data)} items)")
+        for item in unknown_data:
+            if isinstance(item, dict):
+                # Check for direct patient fields (Athena PascalCase)
+                first = item.get('FirstName') or item.get('firstName') or ''
+                last = item.get('LastName') or item.get('lastName') or ''
+                if first or last:
+                    name = f"{first} {last}".strip()
+                    dob = dob or item.get('BirthDate', {}).get('Date') or item.get('dateOfBirth', '')
+                    gender = gender or item.get('Gender') or item.get('Sex') or ''
+                    logger.info(f"[FHIR] Found patient in unknown array: {name}")
+                    break
+
+                # Check nested 'data' structure
+                data = item.get('data', {})
+                if isinstance(data, dict):
+                    patient_obj = data.get('patient', {})
+                    if isinstance(patient_obj, dict):
+                        first = patient_obj.get('FirstName') or patient_obj.get('firstName') or ''
+                        last = patient_obj.get('LastName') or patient_obj.get('lastName') or ''
+                        if first or last:
+                            name = f"{first} {last}".strip()
+                            birth = patient_obj.get('BirthDate', {})
+                            dob = dob or (birth.get('Date') if isinstance(birth, dict) else str(birth))
+                            gender = gender or patient_obj.get('Gender') or patient_obj.get('Sex') or ''
+                            logger.info(f"[FHIR] Found patient in unknown.data.patient: {name}")
+                            break
 
     # Extract vitals
     vitals = Vitals()
