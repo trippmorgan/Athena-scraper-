@@ -1,0 +1,103 @@
+{
+  "manifest_version": 3,
+  "name": "AthenaNet Clinical Bridge + AI Assistant",
+  "version": "2.1.0",
+  "description": "Clinical data integration with Claude AI-powered analysis overlay",
+  
+  "permissions": [
+    "storage",
+    "activeTab",
+    "tabs",
+    "scripting",
+    "downloads"
+  ],
+  
+  "host_permissions": [
+    "https://*.athenahealth.com/*",
+    "https://*.athenanet.athenahealth.com/*",
+    "http://localhost:8000/*",
+    "http://localhost:8001/*",
+    "https://api.anthropic.com/*"
+  ],
+  
+  "background": {
+    "service_worker": "background.js"
+  },
+  
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.athenahealth.com/*",
+        "https://*.athenanet.athenahealth.com/*"
+      ],
+      "js": [
+        "injector.js",
+        "content.js",
+        "claude/athena-assistant.js"
+      ],
+      "css": [
+        "claude/overlay.css"
+      ],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ],
+  
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "interceptor.js",
+        "activeFetcher.js",
+        "claude/overlay-ui.js",
+        "claude/api-client.js",
+        "claude/clinical-analyzer.js"
+      ],
+      "matches": [
+        "https://*.athenahealth.com/*",
+        "https://*.athenanet.athenahealth.com/*"
+      ]
+    }
+  ],
+  
+  "action": {
+    "default_title": "Athena AI Assistant - Click for settings",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  
+  "commands": {
+    "toggle-overlay": {
+      "suggested_key": {
+        "default": "Alt+A",
+        "mac": "Alt+A"
+      },
+      "description": "Toggle Claude AI overlay"
+    },
+    "quick-analyze": {
+      "suggested_key": {
+        "default": "Alt+Q",
+        "mac": "Alt+Q"
+      },
+      "description": "Quick analyze current patient"
+    }
+  },
+  
+  "externally_connectable": {
+    "matches": [
+      "http://localhost:*/*",
+      "http://127.0.0.1:*/*"
+    ]
+  }
+}

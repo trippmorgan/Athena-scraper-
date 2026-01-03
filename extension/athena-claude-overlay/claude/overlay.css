@@ -1,0 +1,701 @@
+/**
+ * Athena AI Assistant - Overlay Styles
+ * Floating panel that provides Claude-powered analysis
+ */
+
+/* ============================================================
+   OVERLAY CONTAINER
+   ============================================================ */
+
+#athena-ai-overlay {
+  position: fixed;
+  top: 80px;
+  right: 20px;
+  width: 380px;
+  max-height: calc(100vh - 120px);
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15), 0 2px 10px rgba(0, 0, 0, 0.1);
+  z-index: 999999;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 14px;
+  color: #1a202c;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+#athena-ai-overlay.collapsed {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+#athena-ai-overlay.hidden {
+  transform: translateX(420px);
+  opacity: 0;
+  pointer-events: none;
+}
+
+#athena-ai-overlay.dragging {
+  opacity: 0.9;
+  cursor: grabbing;
+}
+
+/* ============================================================
+   HEADER
+   ============================================================ */
+
+.aai-header {
+  background: linear-gradient(135deg, #1a365d 0%, #2d4a6f 100%);
+  color: white;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: grab;
+  user-select: none;
+  border-radius: 12px 12px 0 0;
+}
+
+.aai-header:active {
+  cursor: grabbing;
+}
+
+.aai-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.aai-logo {
+  width: 32px;
+  height: 32px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+
+.aai-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.aai-subtitle {
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+.aai-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.aai-header-btn {
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+  color: white;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: background 0.2s;
+}
+
+.aai-header-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* ============================================================
+   PATIENT CONTEXT BAR
+   ============================================================ */
+
+.aai-patient-bar {
+  background: #f0f7ff;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.aai-patient-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.aai-patient-avatar {
+  width: 36px;
+  height: 36px;
+  background: #4299e1;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.aai-patient-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: #1a365d;
+}
+
+.aai-patient-mrn {
+  font-size: 12px;
+  color: #718096;
+}
+
+.aai-patient-status {
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.aai-patient-status.connected {
+  background: #c6f6d5;
+  color: #276749;
+}
+
+.aai-patient-status.loading {
+  background: #fefcbf;
+  color: #975a16;
+}
+
+.aai-patient-status.error {
+  background: #fed7d7;
+  color: #c53030;
+}
+
+/* ============================================================
+   QUICK ACTION BUTTONS
+   ============================================================ */
+
+.aai-quick-actions {
+  display: flex;
+  padding: 10px 12px;
+  gap: 6px;
+  border-bottom: 1px solid #e2e8f0;
+  flex-wrap: wrap;
+}
+
+.aai-quick-btn {
+  padding: 6px 12px;
+  border: 1px solid #e2e8f0;
+  background: #f7fafc;
+  border-radius: 16px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #4a5568;
+}
+
+.aai-quick-btn:hover {
+  background: #edf2f7;
+  border-color: #cbd5e0;
+}
+
+.aai-quick-btn.active {
+  background: #4299e1;
+  border-color: #4299e1;
+  color: white;
+}
+
+.aai-quick-btn.alert {
+  border-color: #fc8181;
+  color: #c53030;
+}
+
+.aai-quick-btn.alert:hover {
+  background: #fff5f5;
+}
+
+/* ============================================================
+   CONTENT AREA
+   ============================================================ */
+
+.aai-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  max-height: 400px;
+}
+
+.aai-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.aai-content::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.aai-content::-webkit-scrollbar-thumb {
+  background: #cbd5e0;
+  border-radius: 3px;
+}
+
+/* ============================================================
+   ALERT CARDS
+   ============================================================ */
+
+.aai-alert {
+  background: #fff5f5;
+  border: 1px solid #feb2b2;
+  border-left: 4px solid #fc8181;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.aai-alert-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.aai-alert-icon {
+  font-size: 16px;
+}
+
+.aai-alert-title {
+  font-weight: 600;
+  color: #c53030;
+  font-size: 13px;
+}
+
+.aai-alert-body {
+  font-size: 13px;
+  color: #742a2a;
+  line-height: 1.5;
+}
+
+.aai-alert.warning {
+  background: #fffaf0;
+  border-color: #fbd38d;
+  border-left-color: #ed8936;
+}
+
+.aai-alert.warning .aai-alert-title {
+  color: #c05621;
+}
+
+.aai-alert.warning .aai-alert-body {
+  color: #7b341e;
+}
+
+.aai-alert.info {
+  background: #ebf8ff;
+  border-color: #90cdf4;
+  border-left-color: #4299e1;
+}
+
+.aai-alert.info .aai-alert-title {
+  color: #2b6cb0;
+}
+
+.aai-alert.info .aai-alert-body {
+  color: #2a4365;
+}
+
+/* ============================================================
+   DATA SECTIONS
+   ============================================================ */
+
+.aai-section {
+  margin-bottom: 16px;
+}
+
+.aai-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.aai-section-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #4a5568;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.aai-section-badge {
+  background: #e2e8f0;
+  color: #4a5568;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.aai-section-content {
+  background: #f7fafc;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+/* ============================================================
+   MEDICATION LIST
+   ============================================================ */
+
+.aai-med-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.aai-med-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.aai-med-item:last-child {
+  border-bottom: none;
+}
+
+.aai-med-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #2d3748;
+}
+
+.aai-med-dose {
+  font-size: 12px;
+  color: #718096;
+}
+
+.aai-med-tag {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.aai-med-tag.anticoag {
+  background: #fed7d7;
+  color: #c53030;
+}
+
+.aai-med-tag.antiplatelet {
+  background: #feebc8;
+  color: #c05621;
+}
+
+/* ============================================================
+   RISK SCORE DISPLAY
+   ============================================================ */
+
+.aai-risk-display {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+  border-radius: 8px;
+}
+
+.aai-risk-score {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: 700;
+  color: white;
+}
+
+.aai-risk-score.low {
+  background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+}
+
+.aai-risk-score.moderate {
+  background: linear-gradient(135deg, #ecc94b 0%, #d69e2e 100%);
+}
+
+.aai-risk-score.high {
+  background: linear-gradient(135deg, #fc8181 0%, #e53e3e 100%);
+}
+
+.aai-risk-details {
+  flex: 1;
+}
+
+.aai-risk-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #2d3748;
+  margin-bottom: 4px;
+}
+
+.aai-risk-factors {
+  font-size: 12px;
+  color: #718096;
+  line-height: 1.4;
+}
+
+/* ============================================================
+   CHAT INPUT
+   ============================================================ */
+
+.aai-chat-input-container {
+  padding: 12px 16px;
+  border-top: 1px solid #e2e8f0;
+  background: #f7fafc;
+  border-radius: 0 0 12px 12px;
+}
+
+.aai-chat-input-wrapper {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.aai-chat-input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  font-size: 13px;
+  resize: none;
+  max-height: 100px;
+  min-height: 40px;
+  font-family: inherit;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.aai-chat-input:focus {
+  outline: none;
+  border-color: #4299e1;
+  box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.15);
+}
+
+.aai-chat-input::placeholder {
+  color: #a0aec0;
+}
+
+.aai-send-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #4299e1;
+  border: none;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  transition: background 0.2s, transform 0.1s;
+}
+
+.aai-send-btn:hover {
+  background: #3182ce;
+}
+
+.aai-send-btn:active {
+  transform: scale(0.95);
+}
+
+.aai-send-btn:disabled {
+  background: #cbd5e0;
+  cursor: not-allowed;
+}
+
+/* ============================================================
+   LOADING STATE
+   ============================================================ */
+
+.aai-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  color: #718096;
+}
+
+.aai-loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #e2e8f0;
+  border-top-color: #4299e1;
+  border-radius: 50%;
+  animation: aai-spin 0.8s linear infinite;
+  margin-bottom: 12px;
+}
+
+@keyframes aai-spin {
+  to { transform: rotate(360deg); }
+}
+
+.aai-loading-text {
+  font-size: 13px;
+}
+
+/* ============================================================
+   RESPONSE BUBBLES
+   ============================================================ */
+
+.aai-response {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 12px;
+  line-height: 1.6;
+}
+
+.aai-response-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #f0f4f8;
+}
+
+.aai-response-icon {
+  font-size: 16px;
+}
+
+.aai-response-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #4299e1;
+  text-transform: uppercase;
+}
+
+.aai-response-body {
+  font-size: 13px;
+  color: #2d3748;
+}
+
+.aai-response-body p {
+  margin: 0 0 8px 0;
+}
+
+.aai-response-body ul {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+.aai-response-body li {
+  margin-bottom: 4px;
+}
+
+/* ============================================================
+   EMPTY STATE
+   ============================================================ */
+
+.aai-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: #718096;
+}
+
+.aai-empty-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+  opacity: 0.5;
+}
+
+.aai-empty-text {
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.aai-empty-hint {
+  font-size: 12px;
+  color: #a0aec0;
+}
+
+/* ============================================================
+   MINIMIZED STATE
+   ============================================================ */
+
+.aai-minimized-icon {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 28px;
+  display: none;
+}
+
+#athena-ai-overlay.collapsed .aai-minimized-icon {
+  display: block;
+}
+
+#athena-ai-overlay.collapsed .aai-header,
+#athena-ai-overlay.collapsed .aai-patient-bar,
+#athena-ai-overlay.collapsed .aai-quick-actions,
+#athena-ai-overlay.collapsed .aai-content,
+#athena-ai-overlay.collapsed .aai-chat-input-container {
+  display: none;
+}
+
+/* ============================================================
+   KEYBOARD SHORTCUT HINT
+   ============================================================ */
+
+.aai-shortcut-hint {
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  margin-bottom: 8px;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.2s, transform 0.2s;
+  pointer-events: none;
+}
+
+#athena-ai-overlay:hover .aai-shortcut-hint {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+
+@media (max-width: 500px) {
+  #athena-ai-overlay {
+    width: calc(100% - 40px);
+    right: 20px;
+    left: 20px;
+  }
+}

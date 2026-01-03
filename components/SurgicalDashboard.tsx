@@ -92,13 +92,33 @@ interface PreOpChecklist {
 
 type SurgicalPhase = 'preop' | 'intraop' | 'postop' | 'notes' | 'billing';
 
+// Patient type from WebSocket updates
+interface PatientFromWS {
+  id: string;
+  mrn: string;
+  name: string;
+  dob: string;
+  gender: string;
+  lastEncounter: string;
+  conditions: string[];
+  medications: string[];
+  vitals: {
+    bp: string;
+    hr: number;
+    temp: number;
+    spo2: number;
+  };
+  notes: string;
+}
+
 interface SurgicalDashboardProps {
+  currentPatient?: PatientFromWS | null;
   onSearch?: (mrn: string) => void;
 }
 
 const API_BASE = 'http://localhost:8000';
 
-export const SurgicalDashboard: React.FC<SurgicalDashboardProps> = ({ onSearch }) => {
+export const SurgicalDashboard: React.FC<SurgicalDashboardProps> = ({ currentPatient, onSearch }) => {
   const [mrn, setMrn] = useState('');
   const [loading, setLoading] = useState(false);
   const [activePhase, setActivePhase] = useState<SurgicalPhase>('preop');
@@ -106,6 +126,25 @@ export const SurgicalDashboard: React.FC<SurgicalDashboardProps> = ({ onSearch }
   const [checklist, setChecklist] = useState<PreOpChecklist | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [clearCacheStatus, setClearCacheStatus] = useState<string | null>(null);
+
+  // Auto-load profile when currentPatient changes from WebSocket
+  useEffect(() => {
+    if (currentPatient?.id) {
+      console.log('[SurgicalDashboard] WebSocket patient received:', currentPatient.id, currentPatient.name);
+      setMrn(currentPatient.id);
+      setError(null);
+      // Fetch the detailed vascular profile for this patient
+      fetch(`${API_BASE}/active/profile/${currentPatient.id}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.profile) {
+            console.log('[SurgicalDashboard] Auto-loaded profile from WebSocket patient:', data.profile.patient_id);
+            setProfile(data.profile);
+          }
+        })
+        .catch(e => console.log('[SurgicalDashboard] Profile fetch pending, will retry on search'));
+    }
+  }, [currentPatient?.id]);
 
   useEffect(() => {
     console.log('[SurgicalDashboard] Profile state updated:', profile);

@@ -241,17 +241,18 @@ const App: React.FC = () => {
         {/* Center Column: Surgical Dashboard */}
         <div className="col-span-6 bg-slate-925 overflow-hidden">
           <SurgicalDashboard
+            currentPatient={currentPatient}
             onSearch={async (mrn) => {
               // Trigger active fetch via Chrome extension
-              console.log('🎯 Initiating active fetch for MRN:', mrn);
+              console.log('Initiating active fetch for MRN:', mrn);
               addToLedger('ActiveFetch', `Requesting data for MRN: ${mrn}`);
 
               try {
                 const result = await sendToExtension('FETCH_BY_MRN', { mrn });
-                console.log('✅ Extension fetch result:', result);
+                console.log('Extension fetch result:', result);
                 addToLedger('ActiveFetch', `Data received for MRN: ${mrn}`);
               } catch (error) {
-                console.warn('⚠️ Extension fetch failed:', error);
+                console.warn('Extension fetch failed:', error);
                 addToLedger('ActiveFetch', `Extension unavailable - using passive mode`);
                 // The SurgicalDashboard will poll the backend anyway
               }

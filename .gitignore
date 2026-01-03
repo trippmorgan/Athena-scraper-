@@ -32,6 +32,9 @@ __pycache__/
 *.pyc
 backend/data/*.json
 backend/data/*.jsonl
+backend/data/artifacts/
+backend/shadow_ehr.log
+backend/shadow_ehr.error.log
 
 **/__pycache__/
 data/*.json
