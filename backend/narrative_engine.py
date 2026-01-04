@@ -265,11 +265,26 @@ OUTPUT:
             for item in unknown_items:
                 if isinstance(item, dict):
                     data = item.get("data", {})
-                    if isinstance(data, dict) and "patient" in data:
-                        patient_data = data["patient"]
-                        break
+                    if isinstance(data, dict):
+                        # Check for available_contacts_and_consents (Athena UPPERCASE format)
+                        contacts = data.get("available_contacts_and_consents")
+                        if isinstance(contacts, dict) and (contacts.get("FIRSTNAME") or contacts.get("LASTNAME")):
+                            # Convert to expected format
+                            patient_data = {
+                                "FirstName": contacts.get("FIRSTNAME", ""),
+                                "LastName": contacts.get("LASTNAME", ""),
+                                "PatientId": contacts.get("PATIENTID", ""),
+                                # Note: available_contacts_and_consents does NOT have DOB/Gender
+                            }
+                            logger.info(f"[NARRATIVE] Found patient in available_contacts_and_consents: {patient_data.get('FirstName')} {patient_data.get('LastName')}")
+                            break
+                        # Check for patient object (legacy path)
+                        if "patient" in data:
+                            patient_data = data["patient"]
+                            break
 
         # Handle Athena format (LastName, BirthDate, Sex) vs FHIR format (name, birthDate, gender)
+        # Also handle UPPERCASE format from available_contacts_and_consents
         if "LastName" in patient_data:
             # Athena format
             dob_obj = patient_data.get("BirthDate", {})

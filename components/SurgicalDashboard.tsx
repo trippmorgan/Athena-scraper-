@@ -111,6 +111,14 @@ interface PreOpChecklist {
 
 type SurgicalPhase = 'preop' | 'intraop' | 'postop' | 'notes' | 'billing';
 
+// Data quality tracking from Observer
+interface DataQuality {
+  score: number;
+  missingCritical: string[];
+  missingImportant?: string[];
+  issues: string[];
+}
+
 // Patient type from WebSocket updates
 interface PatientFromWS {
   id: string;
@@ -145,6 +153,7 @@ export const SurgicalDashboard: React.FC<SurgicalDashboardProps> = ({ currentPat
   const [checklist, setChecklist] = useState<PreOpChecklist | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [clearCacheStatus, setClearCacheStatus] = useState<string | null>(null);
+  const [dataQuality, setDataQuality] = useState<DataQuality | null>(null);
 
   // Notes tab state
   const [selectedDocType, setSelectedDocType] = useState<string>('all');
@@ -241,6 +250,12 @@ export const SurgicalDashboard: React.FC<SurgicalDashboardProps> = ({ currentPat
       console.log('Profile response:', data);
       if (data.success && data.profile) {
         setProfile(data.profile);
+        // Capture data quality info from Observer tracking
+        if (data.dataQuality) {
+          setDataQuality(data.dataQuality);
+          console.log('[DataQuality] Score:', data.dataQuality.score,
+                      'Missing critical:', data.dataQuality.missingCritical);
+        }
         return data.profile;
       }
       return null;
@@ -430,6 +445,44 @@ export const SurgicalDashboard: React.FC<SurgicalDashboardProps> = ({ currentPat
         {clearCacheStatus && (
           <div className="mb-4 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg text-blue-400">
             {clearCacheStatus}
+          </div>
+        )}
+
+        {/* Data Quality Banner - Shows what data is missing */}
+        {dataQuality && (dataQuality.missingCritical.length > 0 || (dataQuality.missingImportant && dataQuality.missingImportant.length > 0)) && (
+          <div className={`mb-4 p-4 rounded-lg border ${
+            dataQuality.missingCritical.length > 0
+              ? 'bg-amber-500/10 border-amber-500/30'
+              : 'bg-blue-500/10 border-blue-500/30'
+          }`}>
+            <div className="flex items-start gap-3">
+              <AlertTriangle className={dataQuality.missingCritical.length > 0 ? 'text-amber-400' : 'text-blue-400'} size={20} />
+              <div className="flex-1">
+                <div className="flex items-center justify-between mb-2">
+                  <span className={`font-medium ${dataQuality.missingCritical.length > 0 ? 'text-amber-400' : 'text-blue-400'}`}>
+                    Data Completeness: {dataQuality.score}%
+                  </span>
+                  <span className="text-xs text-slate-500">Tracked by Observer</span>
+                </div>
+                {dataQuality.missingCritical.length > 0 && (
+                  <div className="text-sm text-amber-300 mb-1">
+                    <strong>Missing Critical:</strong> {dataQuality.missingCritical.join(', ')}
+                  </div>
+                )}
+                {dataQuality.missingImportant && dataQuality.missingImportant.length > 0 && (
+                  <div className="text-sm text-slate-400">
+                    <strong>Missing Important:</strong> {dataQuality.missingImportant.join(', ')}
+                  </div>
+                )}
+                {dataQuality.issues.length > 0 && (
+                  <div className="mt-2 text-xs text-slate-500">
+                    {dataQuality.issues.slice(0, 2).map((issue, i) => (
+                      <div key={i}>{issue}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
 

@@ -104,6 +104,11 @@ class VascularProfile(BaseModel):
     mrn: str
     name: str
 
+    # Demographics (optional - may not be available from all sources)
+    dob: Optional[str] = None           # Date of birth (YYYY-MM-DD or original format)
+    age: Optional[int] = None           # Calculated age in years
+    gender: Optional[str] = None        # Male, Female, or Unknown
+
     # Pre-op critical data
     antithrombotics: List[AntithromboticMed] = []
     renal_function: Optional[RenalFunction] = None
@@ -913,11 +918,20 @@ def _extract_name_fallback(raw_data: Dict[str, Any], patient_id: str) -> str:
         if isinstance(item, dict):
             data = item.get("data", {})
             if isinstance(data, dict):
-                # Check for patient object inside data
+                # Check for available_contacts_and_consents (Athena UPPERCASE format)
+                contacts = data.get("available_contacts_and_consents")
+                if isinstance(contacts, dict):
+                    first = contacts.get("FIRSTNAME") or contacts.get("FirstName") or ""
+                    last = contacts.get("LASTNAME") or contacts.get("LastName") or ""
+                    if first or last:
+                        logger.info(f"[VASCULAR] Found name in available_contacts_and_consents: {first} {last}")
+                        return f"{first} {last}".strip()
+
+                # Check for patient object inside data (legacy path)
                 patient_obj = data.get("patient")
                 if isinstance(patient_obj, dict):
-                    first = patient_obj.get("FirstName") or patient_obj.get("first_name") or ""
-                    last = patient_obj.get("LastName") or patient_obj.get("last_name") or ""
+                    first = patient_obj.get("FirstName") or patient_obj.get("first_name") or patient_obj.get("FIRSTNAME") or ""
+                    last = patient_obj.get("LastName") or patient_obj.get("last_name") or patient_obj.get("LASTNAME") or ""
                     if first or last:
                         return f"{first} {last}".strip()
 
@@ -940,6 +954,65 @@ def build_vascular_profile(patient_id: str, raw_data: Dict[str, Any]) -> Vascula
 
     # Use fallback name extraction for robustness
     name = _extract_name_fallback(raw_data, patient_id)
+
+    # Extract DOB and gender (may be in demographics or other sources)
+    dob = None
+    age = None
+    gender = None
+
+    # Try demographics first
+    if patient_info:
+        dob_raw = patient_info.get("dob") or patient_info.get("BirthDate") or patient_info.get("dateOfBirth")
+        if isinstance(dob_raw, dict):
+            dob_raw = dob_raw.get("Date")
+        if dob_raw:
+            dob = str(dob_raw)
+        gender = patient_info.get("gender") or patient_info.get("Sex") or patient_info.get("GenderMarker")
+
+    # Fallback: search unknown array for available_contacts_and_consents
+    # Note: available_contacts_and_consents typically does NOT have DOB/gender
+    if not dob:
+        unknown_items = raw_data.get("unknown") or []
+        for item in unknown_items:
+            if isinstance(item, dict):
+                data = item.get("data", {})
+                if isinstance(data, dict):
+                    # Check demographics in data
+                    demo = data.get("demographics")
+                    if isinstance(demo, dict):
+                        dob_raw = demo.get("dob") or demo.get("BirthDate") or demo.get("dateOfBirth")
+                        if isinstance(dob_raw, dict):
+                            dob_raw = dob_raw.get("Date")
+                        if dob_raw:
+                            dob = str(dob_raw)
+                        gender = gender or demo.get("gender") or demo.get("Sex")
+
+    # Calculate age from DOB
+    if dob:
+        try:
+            from datetime import datetime
+            # Try multiple date formats
+            for fmt in ["%Y-%m-%d", "%m/%d/%Y", "%m-%d-%Y", "%Y/%m/%d"]:
+                try:
+                    dob_parsed = datetime.strptime(dob.strip(), fmt)
+                    age = (datetime.now() - dob_parsed).days // 365
+                    break
+                except ValueError:
+                    continue
+        except Exception:
+            pass
+
+    # Normalize gender
+    if gender:
+        gender_lower = str(gender).lower().strip()
+        if gender_lower in ["m", "male"]:
+            gender = "Male"
+        elif gender_lower in ["f", "female"]:
+            gender = "Female"
+        else:
+            gender = gender_lower.capitalize()
+
+    logger.info(f"[VASCULAR] Demographics - Name: {name}, DOB: {dob}, Age: {age}, Gender: {gender}")
 
     # Parse medications
     meds_data = (raw_data.get("medications") or {}).get("data") or []
@@ -1031,6 +1104,9 @@ def build_vascular_profile(patient_id: str, raw_data: Dict[str, Any]) -> Vascula
         patient_id=patient_id,
         mrn=str(mrn),
         name=str(name),
+        dob=dob,
+        age=age,
+        gender=gender,
         antithrombotics=antithrombotics,
         renal_function=renal,
         coagulation=coag,

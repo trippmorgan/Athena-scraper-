@@ -48,6 +48,52 @@
  */
 
 const LOCAL_SERVICE_URL = 'http://localhost:8000';
+const OBSERVER_URL = 'http://localhost:3000';
+
+// =============================================================================
+// AUTO-FETCH CONFIGURATION
+// =============================================================================
+// Set to true to automatically fetch clinical data when a new patient is detected
+// This is OPT-IN by default to avoid unexpected behavior
+const AUTO_FETCH_ENABLED = true;  // ENABLED - auto-fetch on patient detection
+const AUTO_FETCH_DEBOUNCE_MS = 30000;  // Don't auto-fetch same patient within 30 seconds
+let lastAutoFetchPatient = null;
+let lastAutoFetchTime = 0;
+
+// =============================================================================
+// OBSERVER TELEMETRY
+// =============================================================================
+/**
+ * emitTelemetry(action, success, data)
+ * ------------------------------------
+ * Sends telemetry events to Medical Mirror Observer for pipeline monitoring.
+ * This is NON-BLOCKING and fails silently - Observer is optional.
+ *
+ * @param {string} action - The action being performed (init, relay, error, etc.)
+ * @param {boolean} success - Whether the action succeeded
+ * @param {object} data - Additional context data
+ */
+async function emitTelemetry(action, success, data = {}) {
+  try {
+    await fetch(`${OBSERVER_URL}/api/events`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'OBSERVER_TELEMETRY',
+        source: 'athena-scraper',
+        event: {
+          stage: 'background',
+          action: action,
+          success: success,
+          timestamp: new Date().toISOString(),
+          data: data
+        }
+      })
+    });
+  } catch (e) {
+    // Silent fail - Observer is optional, don't break main flow
+  }
+}
 
 // =============================================================================
 // STATE MANAGEMENT
@@ -126,6 +172,9 @@ Logger.separator();
 Logger.info('Background service worker starting...');
 Logger.info('Target service:', LOCAL_SERVICE_URL);
 Logger.separator();
+
+// Emit init telemetry
+emitTelemetry('init', true, { target: LOCAL_SERVICE_URL });
 
 // =============================================================================
 // BADGE MANAGEMENT
@@ -216,6 +265,14 @@ async function sendToLocalService(payload) {
       bytesSent += payloadSize;
       lastError = null;
 
+      // Emit telemetry for successful relay
+      emitTelemetry('relay', true, {
+        url: payload.url?.substring(0, 60),
+        method: payload.method,
+        patientId: payload.patientId,
+        size: payloadSize
+      });
+
       // Update badge if status changed
       if (oldStatus !== 'connected') {
         updateBadge();
@@ -245,6 +302,13 @@ async function sendToLocalService(payload) {
     connectionStatus = 'error';
     lastError = error.message;
     updateBadge();
+
+    // Emit telemetry for failed relay
+    emitTelemetry('relay', false, {
+      url: payload.url?.substring(0, 60),
+      error: error.message,
+      queued: pendingQueue.length < MAX_QUEUE_SIZE
+    });
 
     // QUEUE FOR RETRY: Don't lose data if backend is down
     if (pendingQueue.length < MAX_QUEUE_SIZE) {
@@ -289,6 +353,9 @@ async function sendActiveFetchCommand(tabId, action, payload) {
   Logger.active('ACTIVE FETCH COMMAND', { tabId, action, payload });
   activeFetchCount++;
   updateBadge('active');
+
+  // Emit telemetry for active fetch initiation
+  emitTelemetry('active-fetch', true, { action, tabId });
 
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
@@ -382,6 +449,53 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // CRITICAL: Send to backend immediately
     sendToLocalService(message.payload);
     sendResponse({ received: true, queued: connectionStatus !== 'connected' });
+  }
+
+  // PATIENT DETECTED - Auto-Fetch Trigger
+  // When interceptor detects a new patient, optionally trigger active fetch
+  if (message.type === 'PATIENT_DETECTED') {
+    const patientId = message.patientId;
+    const now = Date.now();
+
+    Logger.info(`🆕 PATIENT DETECTED: ${patientId}`);
+    emitTelemetry('patient-detected', true, { patientId, source: message.source });
+
+    // Check if auto-fetch is enabled and debounce
+    if (AUTO_FETCH_ENABLED) {
+      const shouldFetch = (patientId !== lastAutoFetchPatient) ||
+                          (now - lastAutoFetchTime > AUTO_FETCH_DEBOUNCE_MS);
+
+      if (shouldFetch) {
+        lastAutoFetchPatient = patientId;
+        lastAutoFetchTime = now;
+
+        Logger.active(`🚀 AUTO-FETCH triggered for patient ${patientId}`);
+        emitTelemetry('auto-fetch-trigger', true, { patientId });
+
+        // Find Athena tab and trigger fetch
+        const athenaTabId = findAthenaTab();
+        if (athenaTabId) {
+          // Fetch pre-op data (demographics, problems, medications, allergies)
+          sendActiveFetchCommand(athenaTabId, 'FETCH_PREOP', { patientId })
+            .then(result => {
+              Logger.success(`✅ AUTO-FETCH complete for ${patientId}`);
+              emitTelemetry('auto-fetch-complete', true, { patientId });
+            })
+            .catch(error => {
+              Logger.error(`❌ AUTO-FETCH failed: ${error.message}`);
+              emitTelemetry('auto-fetch-complete', false, { patientId, error: error.message });
+            });
+        } else {
+          Logger.warn('No Athena tab found for auto-fetch');
+        }
+      } else {
+        Logger.debug(`Auto-fetch skipped (debounce) for ${patientId}`);
+      }
+    } else {
+      Logger.debug(`Auto-fetch disabled - patient ${patientId} detected but not fetching`);
+    }
+
+    sendResponse({ received: true, autoFetchEnabled: AUTO_FETCH_ENABLED });
   }
 
   // ACTIVE FETCH RESULT (from content script)

@@ -84,10 +84,11 @@ Key Principle: Data flows PASSIVELY. We OBSERVE Athena's own API responses.
 ```bash
 # 1. Clone the repository
 git clone <repo-url>
-cd shadow-ehr-bridge
+cd ~/shadow-ehr-bridge
+conda activate shadow-ehr 
 
 # 2. Start the backend
-cd backend
+cd ~/backend
 pip install -r requirements.txt
 python main.py
 # Backend runs at http://localhost:8000
@@ -101,7 +102,7 @@ python main.py
 # 4. Start the frontend (optional)
 npm install
 npm run dev
-# Frontend runs at http://localhost:5173
+# Frontend runs at http://localhost:3001 (Observer uses 3000)
 
 # 5. Navigate to Athena
 # - Open AthenaNet in Chrome

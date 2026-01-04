@@ -649,10 +649,10 @@ def convert_patient(payload: Any, patient_id: Optional[str] = None) -> FHIRPatie
     # =========================================================================
     first_name = (patient_data.get('firstName') or patient_data.get('FirstName') or
                   patient_data.get('first_name') or patient_data.get('givenName') or
-                  patient_data.get('Given') or '')
+                  patient_data.get('Given') or patient_data.get('FIRSTNAME') or '')
     last_name = (patient_data.get('lastName') or patient_data.get('LastName') or
                  patient_data.get('last_name') or patient_data.get('familyName') or
-                 patient_data.get('Family') or '')
+                 patient_data.get('Family') or patient_data.get('LASTNAME') or '')
 
     # Try patientName or name (might be full name string or object)
     full_name_field = patient_data.get('patientName') or patient_data.get('name') or patient_data.get('Name')
@@ -673,8 +673,9 @@ def convert_patient(payload: Any, patient_id: Optional[str] = None) -> FHIRPatie
     identifiers = []
     mrn = (patient_data.get('mrn') or patient_data.get('MRN') or
            patient_data.get('patientId') or patient_data.get('PatientId') or
-           patient_data.get('patient_id') or patient_data.get('chartId') or
-           patient_data.get('ChartId') or patient_id)
+           patient_data.get('patient_id') or patient_data.get('PATIENTID') or
+           patient_data.get('chartId') or patient_data.get('ChartId') or
+           patient_data.get('CHARTID') or patient_id)
     if mrn:
         identifiers.append({"system": "mrn", "value": str(mrn)})
 
@@ -800,9 +801,10 @@ def convert_to_fhir(endpoint: str, method: str, payload: Any) -> Tuple[str, Any]
             logger.info(f"[FHIR] Extracted labs from compound")
 
         # Extract demographics/patient info - check both raw and top level
-        demo_data = _extract_nested_data(data_source, ['demographics', 'patient', 'patientInfo'])
+        # NOTE: Athena returns patient data in 'available_contacts_and_consents' with UPPERCASE fields
+        demo_data = _extract_nested_data(data_source, ['demographics', 'patient', 'patientInfo', 'available_contacts_and_consents'])
         if not demo_data:
-            demo_data = _extract_nested_data(payload, ['demographics', 'patient', 'patientInfo'])
+            demo_data = _extract_nested_data(payload, ['demographics', 'patient', 'patientInfo', 'available_contacts_and_consents'])
         if demo_data:
             # Get patient ID from multiple sources
             patient_id = (raw_data.get('patientId') or
@@ -833,7 +835,7 @@ def convert_to_fhir(endpoint: str, method: str, payload: Any) -> Tuple[str, Any]
 
     # Check for compound payload by keys (fallback for non-active-fetch URLs)
     if record_type != 'compound' and isinstance(payload, dict):
-        compound_keys = {'medications', 'vitals', 'labs', 'orders', 'problems', 'allergies', 'demographics'}
+        compound_keys = {'medications', 'vitals', 'labs', 'orders', 'problems', 'allergies', 'demographics', 'available_contacts_and_consents'}
         present_keys = set(payload.keys()) & compound_keys
 
         if len(present_keys) >= 2:
@@ -993,28 +995,41 @@ def build_patient_from_aggregated_data(
         logger.debug(f"[FHIR] Searching unknown array for patient data ({len(unknown_data)} items)")
         for item in unknown_data:
             if isinstance(item, dict):
-                # Check for direct patient fields (Athena PascalCase)
-                first = item.get('FirstName') or item.get('firstName') or ''
-                last = item.get('LastName') or item.get('lastName') or ''
+                # Check for direct patient fields (Athena PascalCase and UPPERCASE)
+                first = item.get('FirstName') or item.get('firstName') or item.get('FIRSTNAME') or ''
+                last = item.get('LastName') or item.get('lastName') or item.get('LASTNAME') or ''
                 if first or last:
                     name = f"{first} {last}".strip()
-                    dob = dob or item.get('BirthDate', {}).get('Date') or item.get('dateOfBirth', '')
-                    gender = gender or item.get('Gender') or item.get('Sex') or ''
+                    birth_date = item.get('BirthDate', {})
+                    dob = dob or (birth_date.get('Date') if isinstance(birth_date, dict) else str(birth_date) if birth_date else '') or item.get('dateOfBirth', '')
+                    gender = gender or item.get('Gender') or item.get('Sex') or item.get('GENDER') or ''
+                    mrn = item.get('PATIENTID') or item.get('patientId') or item.get('PatientId') or mrn
                     logger.info(f"[FHIR] Found patient in unknown array: {name}")
                     break
 
                 # Check nested 'data' structure
                 data = item.get('data', {})
                 if isinstance(data, dict):
+                    # Check for available_contacts_and_consents (Athena UPPERCASE format)
+                    contacts = data.get('available_contacts_and_consents', {})
+                    if contacts and isinstance(contacts, dict):
+                        first = contacts.get('FIRSTNAME') or contacts.get('FirstName') or ''
+                        last = contacts.get('LASTNAME') or contacts.get('LastName') or ''
+                        if first or last:
+                            name = f"{first} {last}".strip()
+                            mrn = contacts.get('PATIENTID') or contacts.get('patientId') or mrn
+                            logger.info(f"[FHIR] Found patient in available_contacts_and_consents: {name}")
+                            break
+
                     patient_obj = data.get('patient', {})
                     if isinstance(patient_obj, dict):
-                        first = patient_obj.get('FirstName') or patient_obj.get('firstName') or ''
-                        last = patient_obj.get('LastName') or patient_obj.get('lastName') or ''
+                        first = patient_obj.get('FirstName') or patient_obj.get('firstName') or patient_obj.get('FIRSTNAME') or ''
+                        last = patient_obj.get('LastName') or patient_obj.get('lastName') or patient_obj.get('LASTNAME') or ''
                         if first or last:
                             name = f"{first} {last}".strip()
                             birth = patient_obj.get('BirthDate', {})
                             dob = dob or (birth.get('Date') if isinstance(birth, dict) else str(birth))
-                            gender = gender or patient_obj.get('Gender') or patient_obj.get('Sex') or ''
+                            gender = gender or patient_obj.get('Gender') or patient_obj.get('Sex') or patient_obj.get('GENDER') or ''
                             logger.info(f"[FHIR] Found patient in unknown.data.patient: {name}")
                             break
 

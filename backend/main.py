@@ -52,7 +52,10 @@ from vascular_extractors import (
     AntithromboticBridgingCalculator, ANTITHROMBOTIC_DATABASE
 )
 from vascular_parser import build_vascular_profile
-from telemetry import emit_telemetry, set_broadcast_function
+from telemetry import (
+    emit_telemetry, set_broadcast_function,
+    emit_data_quality, emit_transfer_summary
+)
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -65,6 +68,37 @@ from fhir_converter import (
     convert_to_fhir, extract_patient_id, create_log_entry,
     build_patient_from_aggregated_data
 )
+
+# ============================================================================
+# SQL INTEGRATION PLACEHOLDER (Plaud/Vascular AI)
+# ============================================================================
+# PLACEHOLDER: SQL integration with Plaud/Vascular AI server
+# To be implemented after core pipeline is stable
+# See: ~/.claude/plans/sparkling-noodling-sun.md Phase 3
+SQL_INTEGRATION_ENABLED = False
+
+async def export_to_sql(patient_id: str, record_type: str, data: dict):
+    """
+    Future: Export clinical data to Plaud/Vascular AI SQL server.
+
+    This will integrate with the existing SQL database used by:
+    - Plaud transcription system
+    - Vascular AI analysis pipeline
+
+    Args:
+        patient_id: The patient identifier
+        record_type: Type of data (medication, problem, vital, etc.)
+        data: The clinical data to export
+    """
+    if not SQL_INTEGRATION_ENABLED:
+        return  # Skip until integration complete
+
+    # TODO: Implement connection to Plaud/Vascular AI SQL server
+    # - Connect to external database
+    # - Map FHIR resources to SQL schema
+    # - Insert/update records
+    # - Handle conflicts and deduplication
+    pass
 
 # ============================================================================
 # LOGGING CONFIGURATION
@@ -630,12 +664,25 @@ class ConnectionManager:
             for item in cache.get('unknown', []):
                 if isinstance(item, dict):
                     data = item.get('data', {})
-                    if isinstance(data, dict) and 'patient' in data:
-                        patient_info = data['patient']
-                        if isinstance(patient_info, dict) and patient_info.get('LastName'):
-                            logger.info(f"  🔍 RECOVERED patient from unknown scan: {patient_info.get('LastName')}")
-                            cache['patient'] = patient_info
-                            break
+                    if isinstance(data, dict):
+                        # Check for 'patient' key
+                        if 'patient' in data:
+                            patient_info = data['patient']
+                            if isinstance(patient_info, dict) and patient_info.get('LastName'):
+                                logger.info(f"  🔍 RECOVERED patient from unknown scan: {patient_info.get('LastName')}")
+                                cache['patient'] = patient_info
+                                break
+                        # Check for 'available_contacts_and_consents' key (Athena UPPERCASE format)
+                        if 'available_contacts_and_consents' in data:
+                            contacts = data['available_contacts_and_consents']
+                            if isinstance(contacts, dict) and (contacts.get('FIRSTNAME') or contacts.get('LASTNAME')):
+                                logger.info(f"  🔍 RECOVERED patient from available_contacts_and_consents: {contacts.get('FIRSTNAME')} {contacts.get('LASTNAME')}")
+                                cache['patient'] = {
+                                    'FirstName': contacts.get('FIRSTNAME', ''),
+                                    'LastName': contacts.get('LASTNAME', ''),
+                                    'PatientId': contacts.get('PATIENTID', '')
+                                }
+                                break
 
         # Build and emit patient update
         patient = build_patient_from_aggregated_data(
@@ -2086,9 +2133,23 @@ async def get_vascular_profile(patient_id: str):
                    f"antithrombotics={len(profile.antithrombotics)}, "
                    f"documents={len(profile.documents)}")
 
+        # Emit data quality telemetry to Observer
+        # This tracks what data is present vs missing for reporting improvements
+        quality_assessment = await emit_data_quality(
+            patient_id=patient_id,
+            data_type="vascular_profile",
+            data=profile_dict
+        )
+
         return {
             "success": True,
-            "profile": profile_dict
+            "profile": profile_dict,
+            "dataQuality": {
+                "score": quality_assessment.get("score", 0),
+                "missingCritical": quality_assessment.get("missing", {}).get("critical", []),
+                "missingImportant": quality_assessment.get("missing", {}).get("important", []),
+                "issues": quality_assessment.get("quality_issues", [])[:5]  # Top 5 issues
+            }
         }
     except Exception as e:
         logger.error(f"[PROFILE] Failed to build VascularProfile: {e}")
@@ -2170,7 +2231,7 @@ async def get_preop_checklist(patient_id: str):
 
         ready = len(blocking_issues) == 0
 
-        return {
+        checklist_data = {
             "patient_id": patient_id,
             "mrn": profile.mrn,
             "name": profile.name,
@@ -2188,6 +2249,22 @@ async def get_preop_checklist(patient_id: str):
             "ready_for_surgery": ready,
             "blocking_issues": blocking_issues,
         }
+
+        # Emit data quality telemetry for the checklist
+        quality_assessment = await emit_data_quality(
+            patient_id=patient_id,
+            data_type="preop_checklist",
+            data=checklist_data
+        )
+
+        # Add quality info to response
+        checklist_data["dataQuality"] = {
+            "score": quality_assessment.get("score", 0),
+            "missingCritical": quality_assessment.get("missing", {}).get("critical", []),
+            "issues": quality_assessment.get("quality_issues", [])[:3]
+        }
+
+        return checklist_data
     except Exception as e:
         logger.error(f"[CHECKLIST] Failed: {e}")
         return {"error": str(e)}

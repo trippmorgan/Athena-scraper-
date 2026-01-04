@@ -171,6 +171,42 @@
     return null;
   }
 
+  // ============ PATIENT DETECTION (Auto-Fetch Trigger) ============
+  // Tracks when we switch to a new patient - triggers auto-fetch
+  let lastDetectedPatientId = null;
+  let lastDetectionTime = 0;
+  const DETECTION_DEBOUNCE_MS = 5000; // Don't re-trigger within 5 seconds
+
+  function checkPatientChange(patientId, sourceUrl) {
+    if (!patientId) return;
+
+    const now = Date.now();
+
+    // Check if this is a NEW patient (different from last detected)
+    if (patientId !== lastDetectedPatientId) {
+      Logger.success(`🆕 NEW PATIENT DETECTED: ${patientId} (was: ${lastDetectedPatientId || 'none'})`);
+      lastDetectedPatientId = patientId;
+      lastDetectionTime = now;
+
+      // Emit PATIENT_DETECTED event for auto-fetch
+      window.postMessage({
+        type: 'PATIENT_DETECTED',
+        patientId: patientId,
+        source: sourceUrl,
+        timestamp: new Date().toISOString()
+      }, '*');
+
+      // Also emit telemetry
+      emitTelemetry('patient-detected', true, {
+        patientId: patientId,
+        source: sourceUrl.substring(0, 100)
+      });
+    } else if (now - lastDetectionTime > DETECTION_DEBOUNCE_MS) {
+      // Same patient but debounce period passed - refresh detection time
+      lastDetectionTime = now;
+    }
+  }
+
   // ============ FETCH INTERCEPTOR ============
   const originalFetch = window.fetch;
   window.fetch = async function(...args) {
@@ -200,13 +236,20 @@
         if (contentType.includes('application/json')) {
           clone.json().then(data => {
             stats.fetchCaptured++;
+            const patientId = extractPatientContext(url);
+
+            // Check for patient change (triggers auto-fetch)
+            if (patientId) {
+              checkPatientChange(patientId, url);
+            }
+
             sendToContentScript({
               source: 'fetch',
               method: method.toUpperCase(),
               url: url,
               status: response.status,
               timestamp: new Date().toISOString(),
-              patientId: extractPatientContext(url),
+              patientId: patientId,
               data: data,
               size: JSON.stringify(data).length
             });
@@ -248,13 +291,20 @@
           if (contentType.includes('application/json')) {
             const data = JSON.parse(this.responseText);
             stats.xhrCaptured++;
+            const patientId = extractPatientContext(meta.url);
+
+            // Check for patient change (triggers auto-fetch)
+            if (patientId) {
+              checkPatientChange(patientId, meta.url);
+            }
+
             sendToContentScript({
               source: 'xhr',
               method: meta.method.toUpperCase(),
               url: meta.url,
               status: this.status,
               timestamp: new Date().toISOString(),
-              patientId: extractPatientContext(meta.url),
+              patientId: patientId,
               data: data,
               size: this.responseText.length
             });
