@@ -88,6 +88,25 @@
   let activeCommandCount = 0;   // Commands from background.js
   let contextValid = true;      // Extension context validity flag
 
+  // ============ OBSERVER TELEMETRY ============
+  function emitTelemetry(action, success, data = {}) {
+    try {
+      window.postMessage({
+        type: 'OBSERVER_TELEMETRY',
+        source: 'athena-scraper',
+        event: {
+          stage: 'injector',
+          action: action,
+          success: success,
+          timestamp: new Date().toISOString(),
+          data: data
+        }
+      }, '*');
+    } catch (e) {
+      // Silent fail - observer is optional
+    }
+  }
+
   /**
    * isContextValid()
    * ----------------
@@ -281,6 +300,13 @@
         type: 'API_CAPTURE',
         payload: payload
       });
+
+      // Emit telemetry for observer
+      emitTelemetry('forward', true, {
+        method: payload.method,
+        url: payload.url?.substring(0, 100),
+        count: passiveMessageCount
+      });
     }
 
     // Handle active fetch results from activeFetcher.js
@@ -359,6 +385,9 @@
 
   Logger.success('Content script ready');
   Logger.info('Modes: Passive Interception + Active Fetching');
+
+  // Emit init telemetry
+  emitTelemetry('init', true, { page: window.location.hostname });
 
   /**
    * Periodic Status Logging

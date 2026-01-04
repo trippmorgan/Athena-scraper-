@@ -84,10 +84,33 @@
     errors: 0
   };
 
+  // ============ OBSERVER TELEMETRY ============
+  // Emits events to Medical Mirror Observer for pipeline monitoring
+  function emitTelemetry(action, success, data = {}) {
+    try {
+      window.postMessage({
+        type: 'OBSERVER_TELEMETRY',
+        source: 'athena-scraper',
+        event: {
+          stage: 'interceptor',
+          action: action,
+          success: success,
+          timestamp: new Date().toISOString(),
+          data: data
+        }
+      }, '*');
+    } catch (e) {
+      // Silent fail - observer is optional
+    }
+  }
+
   Logger.info('═'.repeat(50));
   Logger.info('Interceptor initializing...');
   Logger.info('Capture patterns:', CONFIG.capturePatterns);
   Logger.info('═'.repeat(50));
+
+  // Emit init telemetry
+  emitTelemetry('init', true, { patterns: CONFIG.capturePatterns.length });
 
   function shouldCapture(url) {
     const urlStr = url.toString().toLowerCase();
@@ -115,6 +138,16 @@
       type: 'ATHENA_API_INTERCEPT',
       payload: data
     }, '*');
+
+    // Emit telemetry for observer
+    emitTelemetry('capture', true, {
+      url: data.url.substring(0, 100),
+      method: data.method,
+      status: data.status,
+      size: data.size,
+      patientId: data.patientId,
+      source: data.source
+    });
   }
 
   function extractPatientContext(url) {
