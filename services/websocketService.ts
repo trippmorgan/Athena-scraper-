@@ -5,7 +5,27 @@ type WebSocketMessage =
   | { type: 'PATIENT_UPDATE'; data: Patient }
   | { type: 'STATUS_UPDATE'; data: string }
   | { type: 'PING'; timestamp: string }
-  | { type: 'CLINICAL_UPDATE'; data: any };
+  | { type: 'CLINICAL_UPDATE'; data: any }
+  | { type: 'OBSERVER_TELEMETRY'; source: string; event: any };
+
+// Emit telemetry for Medical Mirror Observer (via postMessage)
+function emitObserverTelemetry(stage: string, action: string, success: boolean, data: Record<string, any> = {}) {
+  try {
+    window.postMessage({
+      type: 'OBSERVER_TELEMETRY',
+      source: 'athena-scraper',
+      event: {
+        stage,
+        action,
+        success,
+        timestamp: new Date().toISOString(),
+        data
+      }
+    }, '*');
+  } catch (e) {
+    // Silent fail - observer is optional
+  }
+}
 
 // Frontend Logger with styled console output
 const Logger = {
@@ -77,6 +97,10 @@ class WebSocketService {
 
       this.reconnectAttempts = 0;
       this.onStatusChange?.(ScraperStatus.INTERCEPTING);
+      // Emit connection telemetry for Observer
+      emitObserverTelemetry('frontend', 'websocket-connect', true, {
+        url: this.url
+      });
     };
 
     this.socket.onmessage = (event) => {
@@ -114,6 +138,19 @@ class WebSocketService {
             });
             Logger.separator();
             this.onPatientUpdate?.(message.data);
+            // Emit frontend telemetry for Observer
+            emitObserverTelemetry('frontend', 'render', true, {
+              patientId: message.data.mrn,
+              name: message.data.name,
+              conditions: message.data.conditions?.length || 0,
+              medications: message.data.medications?.length || 0
+            });
+            break;
+
+          case 'OBSERVER_TELEMETRY':
+            // Re-emit backend telemetry via postMessage for Observer extension
+            Logger.debug('Backend telemetry received, re-emitting for Observer');
+            window.postMessage(message, '*');
             break;
 
           case 'STATUS_UPDATE':

@@ -52,6 +52,7 @@ from vascular_extractors import (
     AntithromboticBridgingCalculator, ANTITHROMBOTIC_DATABASE
 )
 from vascular_parser import build_vascular_profile
+from telemetry import emit_telemetry, set_broadcast_function
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -321,6 +322,18 @@ class ConnectionManager:
             logger.info("Converting to FHIR R4...")
             record_type, fhir_resource = convert_to_fhir(endpoint, method, payload)
             logger.info(f"  🏷️  RECORD TYPE DETECTED: {record_type.upper()}")
+
+            # Emit FHIR conversion telemetry
+            await emit_telemetry(
+                stage="fhir-converter",
+                action="convert",
+                success=True,
+                data={
+                    "recordType": record_type,
+                    "patientId": raw_patient,
+                    "url": endpoint[:100] if endpoint else None
+                }
+            )
             if record_type == 'unknown':
                 logger.warning(f"  ⚠️  UNKNOWN record type - data may not be categorized correctly!")
                 logger.warning(f"  ⚠️  URL: {endpoint[:100]}")
@@ -649,6 +662,19 @@ class ConnectionManager:
             "data": patient.model_dump()
         })
 
+        # Emit WebSocket broadcast telemetry
+        await emit_telemetry(
+            stage="websocket",
+            action="broadcast",
+            success=True,
+            data={
+                "messageType": "PATIENT_UPDATE",
+                "patientId": patient_id,
+                "conditions": len(patient.conditions),
+                "medications": len(patient.medications)
+            }
+        )
+
     def set_mode(self, mode: str):
         """Set the scraper mode."""
         try:
@@ -676,6 +702,9 @@ event_indexer = create_indexer("data")
 
 # Global connection manager
 manager = ConnectionManager(event_store, event_indexer)
+
+# Set up telemetry to broadcast via WebSocket to frontend
+set_broadcast_function(manager.broadcast_to_frontend)
 
 # ============================================================================
 # FASTAPI APPLICATION
@@ -1318,6 +1347,20 @@ async def ingest_payload(request: Request, x_source: Optional[str] = Header(None
         # Process through the same pipeline as WebSocket
         await manager.process_athena_payload(internal_payload)
 
+        # Emit telemetry for Observer
+        await emit_telemetry(
+            stage="backend",
+            action="ingest",
+            success=True,
+            data={
+                "url": url[:100] if url else None,
+                "method": method,
+                "patientId": patient_id,
+                "size": size,
+                "source": source
+            }
+        )
+
         # If we have a patient ID from active fetch, set it as current context
         if patient_id and source == 'active-fetch':
             manager.current_patient_id = patient_id
@@ -1343,6 +1386,13 @@ async def ingest_payload(request: Request, x_source: Optional[str] = Header(None
     except Exception as e:
         logger.error(f"Ingest error: {e}")
         logger.exception("Full traceback:")
+        # Emit error telemetry
+        await emit_telemetry(
+            stage="backend",
+            action="ingest",
+            success=False,
+            data={"errorMessage": str(e)}
+        )
         return {
             "status": "error",
             "message": str(e)
